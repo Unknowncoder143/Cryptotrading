@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Transaction Preview for Executive Trigger</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: #f9f9fb;
+      color: #333;
+    }
+
+    .container {
+      max-width: 600px;
+      background: #fff;
+      margin: auto;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      border-radius: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 24px;
+      color: #222;
+    }
+
+    label {
+      font-weight: 600;
+      margin-top: 12px;
+      display: block;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      border: none;
+      background: #2c3e50;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #1a252f;
+    }
+
+    #transactionPreview {
+      margin-top: 20px;
+      background: #f4f7fa;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    h3 {
+      text-align: center;
+      margin-top: 32px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Transaction Preview for Executive Trigger</h2>
+
+    <label for="network">Network</label>
+    <select id="network">
+      <option value="polygon">Polygon</option>
+      <option value="ethereum">Ethereum</option>
+      <option value="bsc">Binance Smart Chain</option>
+    </select>
+
+    <label for="contractAddress">Contract Address</label>
+    <input type="text" id="contractAddress" placeholder="Enter Contract Address">
+
+    <label for="method">Method (Function)</label>
+    <input type="text" id="method" placeholder="Enter method name (e.g., triggerAction)">
+
+    <label for="params">Parameters (JSON)</label>
+    <input type="text" id="params" placeholder='Enter params as JSON (e.g., {"param1": "value1", "param2": "value2"})'>
+
+    <button onclick="previewTransaction()">Preview Transaction</button>
+
+    <h3>Transaction Preview</h3>
+    <div id="transactionPreview">Please fill the contract details to preview the transaction.</div>
+  </div>
+
+  <script>
+    async function previewTransaction() {
+      const network = document.getElementById("network").value;
+      const contractAddress = document.getElementById("contractAddress").value;
+      const methodName = document.getElementById("method").value;
+      const params = JSON.parse(document.getElementById("params").value || '{}');
+
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
+
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+
+      try {
+        const contractAbi = await fetchAbi(contractAddress); // Function to fetch contract ABI
+        const contract = new web3.eth.Contract(contractAbi, contractAddress);
+
+        // Estimate Gas
+        const estimatedGas = await contract.methods[methodName](...Object.values(params)).estimateGas();
+        const gasPrice = await web3.eth.getGasPrice();
+        const networkFee = web3.utils.fromWei((gasPrice * estimatedGas).toString(), 'ether');
+
+        const fromAddress = await web3.eth.getAccounts()[0]; // Assuming the first account is the sender
+
+        // Show transaction preview
+        const previewText = `
+          <strong>From Address:</strong> ${fromAddress}<br>
+          <strong>To Address:</strong> ${contractAddress}<br>
+          <strong>Method:</strong> ${methodName}(${JSON.stringify(params)})<br>
+          <strong>Estimated Gas:</strong> ${estimatedGas}<br>
+          <strong>Gas Price:</strong> ${web3.utils.fromWei(gasPrice, 'gwei')} Gwei<br>
+          <strong>Estimated Network Fee:</strong> ${networkFee} ETH<br>
+          <strong>Transaction Data:</strong> ${contract.methods[methodName](...Object.values(params)).encodeABI()}
+        `;
+
+        document.getElementById("transactionPreview").innerHTML = previewText;
+      } catch (err) {
+        console.error(err);
+        document.getElementById("transactionPreview").innerHTML = "Error previewing transaction.";
+      }
+    }
+
+    // Function to fetch ABI (You can replace this with a proper method or service)
+    async function fetchAbi(contractAddress) {
+      // Fetch ABI from a public source or local storage
+      // For now, it's hardcoded, but you should replace this with actual ABI fetching logic.
+      return [
+        // Example ABI
+        {
+          "constant": false,
+          "inputs": [
+            { "name": "param1", "type": "string" },
+            { "name": "param2", "type": "uint256" }
+          ],
+          "name": "triggerAction",
+          "outputs": [],
+          "payable": false,
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+    }
+  </script>
+</body>
+</html>
