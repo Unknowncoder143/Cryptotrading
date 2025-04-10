@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    /* Same styles as before */
+    /* Add styles here for your page layout */
   </style>
 </head>
 <body>
@@ -16,7 +16,7 @@
     <h2>WBTC-USDT Pool Calculator</h2>
     <button onclick="connectWallet()">Connect Wallet</button>
 
-    <!-- Input fields -->
+    <!-- Dropdown to select the network -->
     <label for="network">Network</label>
     <select id="network">
       <option value="polygon">Polygon</option>
@@ -24,34 +24,39 @@
       <option value="bsc">Binance Smart Chain</option>
     </select>
 
+    <!-- Input for the pool contract address -->
     <label for="poolAddress">Pool Contract Address</label>
     <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
 
+    <!-- Dropdown to select swap direction -->
     <label for="direction">Swap Direction</label>
     <select id="direction">
       <option value="usdtToWbtc">USDT to WBTC</option>
       <option value="wbtcToUsdt">WBTC to USDT</option>
     </select>
 
+    <!-- Input for the amount to swap -->
     <label for="amount">Amount to Swap</label>
     <input type="number" id="amount" step="any">
 
+    <!-- Fee and slippage input -->
     <label for="fee">Fee (%)</label>
     <input type="number" id="fee" value="0.3" step="any">
 
     <label for="slippage">Slippage Tolerance (%)</label>
     <input type="number" id="slippage" value="0.5" step="any">
 
-    <!-- Reserve displays -->
+    <!-- Reserve display for WBTC and USDT -->
     <label for="wbtcReserve">WBTC Reserve</label>
     <input type="number" id="wbtcReserve" readonly>
 
     <label for="usdtReserve">USDT Reserve</label>
     <input type="number" id="usdtReserve" readonly>
 
-    <!-- Buttons -->
+    <!-- Buttons to fetch reserves, calculate swap, calculate network fee, and execute the swap -->
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
+    <button onclick="calculateNetworkFee()">Calculate Network Fee</button>
     <button onclick="executeSwap()">Execute Swap</button>
 
     <h3>Swap Result</h3>
@@ -62,7 +67,7 @@
     let web3;
     let userAddress;
 
-    // Connect wallet
+    // Function to connect the wallet (MetaMask)
     async function connectWallet() {
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
@@ -79,11 +84,12 @@
       }
     }
 
-    // Fetch reserves from the pool contract
+    // Fetches reserves from the liquidity pool contract
     async function fetchReserves() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
 
+      // RPC URLs for different networks
       const rpcUrls = {
         polygon: "https://polygon-rpc.com",
         ethereum: "https://cloudflare-eth.com",
@@ -92,24 +98,29 @@
 
       const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
+      // ABI for ERC20 token contract
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
         { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
       ];
 
+      // ABI for the liquidity pool contract
       const poolAbi = [
         { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
         { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
       ];
 
       try {
+        // Get token addresses from the pool contract
         const pool = new web3.eth.Contract(poolAbi, poolAddress);
         const token0Addr = await pool.methods.token0().call();
         const token1Addr = await pool.methods.token1().call();
 
+        // Create ERC20 token contract instances
         const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
         const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
 
+        // Fetch balances and decimals of token0 and token1
         const [bal0, dec0] = await Promise.all([
           token0.methods.balanceOf(poolAddress).call(),
           token0.methods.decimals().call()
@@ -120,12 +131,15 @@
           token1.methods.decimals().call()
         ]);
 
+        // Convert to human-readable values
         const reserve0 = Number(bal0) / 10 ** dec0;
         const reserve1 = Number(bal1) / 10 ** dec1;
 
+        // Assign WBTC and USDT reserves
         const wbtcReserve = dec0 === "8" ? reserve0 : reserve1;
         const usdtReserve = dec0 === "6" ? reserve0 : reserve1;
 
+        // Display reserves
         document.getElementById("wbtcReserve").value = wbtcReserve;
         document.getElementById("usdtReserve").value = usdtReserve;
 
@@ -136,7 +150,7 @@
       }
     }
 
-    // Calculate network fee and execute the swap
+    // Executes the swap after estimating gas and network fee
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -151,6 +165,7 @@
       const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
       const contractAddress = poolAddress;
 
+      // Pool ABI with the swap function
       const poolAbi = [
         {
           "constant": false,
@@ -168,14 +183,15 @@
       const pool = new web3.eth.Contract(poolAbi, contractAddress);
 
       try {
-        // Estimate gas required for the swap
-        const gasPrice = await web3.eth.getGasPrice(); // Get current gas price
-        const estimatedGas = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress }); // Estimate gas
+        // Estimate gas required for the swap transaction
+        const gasPrice = await web3.eth.getGasPrice();
+        const estimatedGas = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
 
-        const networkFee = estimatedGas * gasPrice; // Calculate the total network fee
+        // Calculate network fee
+        const networkFee = estimatedGas * gasPrice;
         const networkFeeInEther = web3.utils.fromWei(networkFee.toString(), 'ether'); // Convert to Ether
 
-        // Show network fee
+        // Show network fee in an alert
         alert(`Estimated Network Fee: ${networkFeeInEther} ETH`);
 
         // Proceed with the swap
@@ -188,6 +204,7 @@
       }
     }
 
+    // Function to calculate the swap result
     function calculate() {
       const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
       const usdt = parseFloat(document.getElementById("usdtReserve").value);
@@ -227,8 +244,9 @@
         output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
       }
 
+      // Display swap calculation result
       document.getElementById("result").innerHTML = output;
     }
   </script>
 </body>
-  </html>
+</html>
