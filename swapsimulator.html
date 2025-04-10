@@ -1,61 +1,152 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>WBTC-USDT Pool Swap Calculator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
   <style>
-    body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; }
-    input, select, button { width: 100%; padding: 8px; margin: 8px 0; }
-    button { background: #222; color: #fff; font-weight: bold; border: none; cursor: pointer; }
-    h2, h3 { text-align: center; }
-    #result { background: #f0f0f0; padding: 15px; border-radius: 10px; min-height: 100px; }
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: #f9f9fb;
+      color: #333;
+    }
+
+    .container {
+      max-width: 500px;
+      background: #fff;
+      margin: auto;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      border-radius: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 24px;
+      color: #222;
+    }
+
+    label {
+      font-weight: 600;
+      margin-top: 12px;
+      display: block;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      border: none;
+      background: #2c3e50;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #1a252f;
+    }
+
+    #result {
+      margin-top: 20px;
+      background: #f4f7fa;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    h3 {
+      text-align: center;
+      margin-top: 32px;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
-  <h2>WBTC-USDT Pool Calculator</h2>
+  <div class="container">
+    <h2>WBTC-USDT Pool Calculator</h2>
 
-  <label>Pool Contract Address:</label>
-  <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
+    <label for="network">Network</label>
+    <select id="network">
+      <option value="polygon">Polygon</option>
+      <option value="ethereum">Ethereum</option>
+      <option value="bsc">Binance Smart Chain</option>
+    </select>
 
-  <label>Swap Direction:</label>
-  <select id="direction">
-    <option value="usdtToWbtc">USDT to WBTC</option>
-    <option value="wbtcToUsdt">WBTC to USDT</option>
-  </select>
+    <label for="poolAddress">Pool Contract Address</label>
+    <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
 
-  <label>Amount to Swap:</label>
-  <input type="number" id="amount" step="any">
+    <label for="direction">Swap Direction</label>
+    <select id="direction">
+      <option value="usdtToWbtc">USDT to WBTC</option>
+      <option value="wbtcToUsdt">WBTC to USDT</option>
+    </select>
 
-  <label>Fee (%):</label>
-  <input type="number" id="fee" value="0.3" step="any">
+    <label for="amount">Amount to Swap</label>
+    <input type="number" id="amount" step="any">
 
-  <label>Slippage Tolerance (%):</label>
-  <input type="number" id="slippage" value="0.5" step="any">
+    <label for="fee">Fee (%)</label>
+    <input type="number" id="fee" value="0.3" step="any">
 
-  <label>WBTC Reserve:</label>
-  <input type="number" id="wbtcReserve" step="any" readonly>
+    <label for="slippage">Slippage Tolerance (%)</label>
+    <input type="number" id="slippage" value="0.5" step="any">
 
-  <label>USDT Reserve:</label>
-  <input type="number" id="usdtReserve" step="any" readonly>
+    <label for="wbtcReserve">WBTC Reserve</label>
+    <input type="number" id="wbtcReserve" readonly>
 
-  <button onclick="fetchReserves()">Load Reserves</button>
-  <button onclick="calculate()">Calculate Swap</button>
+    <label for="usdtReserve">USDT Reserve</label>
+    <input type="number" id="usdtReserve" readonly>
 
-  <h3>Swap Result:</h3>
-  <div id="result">Please load reserves to begin.</div>
+    <button onclick="fetchReserves()">Load Reserves</button>
+    <button onclick="calculate()">Calculate Swap</button>
+
+    <h3>Swap Result</h3>
+    <div id="result">Please load reserves to begin.</div>
+  </div>
 
   <script>
     async function fetchReserves() {
+      const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
-      const web3 = new Web3(new Web3.providers.HttpProvider('https://polygon-rpc.com'));
+
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
+
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
         { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
       ];
+
       const poolAbi = [
-        { "inputs": [], "name": "token0", "outputs": [{ "internalType": "address", "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
-        { "inputs": [], "name": "token1", "outputs": [{ "internalType": "address", "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
+        { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
+        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
       ];
 
       try {
@@ -70,6 +161,7 @@
           token0.methods.balanceOf(poolAddress).call(),
           token0.methods.decimals().call()
         ]);
+
         const [bal1, dec1] = await Promise.all([
           token1.methods.balanceOf(poolAddress).call(),
           token1.methods.decimals().call()
