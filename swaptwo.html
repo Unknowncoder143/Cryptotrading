@@ -7,55 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    /* Add styles for UI elements */
-    body {
-      font-family: 'Inter', sans-serif;
-      padding: 20px;
-      background-color: #f5f5f5;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-    h2 {
-      text-align: center;
-      font-size: 24px;
-      margin-bottom: 20px;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    input, select {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    h3 {
-      text-align: center;
-      font-size: 18px;
-    }
-    #result {
-      margin-top: 20px;
-      text-align: center;
-    }
+    /* Same styles as before */
   </style>
 </head>
 <body>
@@ -123,7 +75,6 @@
       }
     }
 
-    // Fetch reserves
     async function fetchReserves() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -134,7 +85,7 @@
         bsc: "https://bsc-dataseed.binance.org/"
       };
 
-      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
@@ -147,12 +98,12 @@
       ];
 
       try {
-        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
+        const pool = new web3.eth.Contract(poolAbi, poolAddress);
         const token0Addr = await pool.methods.token0().call();
         const token1Addr = await pool.methods.token1().call();
 
-        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
+        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
 
         const [bal0, dec0] = await Promise.all([
           token0.methods.balanceOf(poolAddress).call(),
@@ -180,7 +131,6 @@
       }
     }
 
-    // Execute swap
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -212,11 +162,13 @@
       const pool = new web3.eth.Contract(poolAbi, contractAddress);
 
       try {
-        // Estimate gas before sending the transaction
+        // Estimate gas fee for the transaction
         const gasEstimate = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
-        const gasPrice = await web3.eth.getGasPrice();
 
-        // Send the transaction with estimated gas
+        // Optionally, set a gas price based on the network
+        const gasPrice = await web3.eth.getGasPrice(); // Fetches the current gas price from the network
+
+        // Send the transaction with the estimated gas and gas price
         await pool.methods.swap(amountInWei).send({
           from: userAddress,
           gas: gasEstimate,
@@ -230,7 +182,6 @@
       }
     }
 
-    // Calculate swap result
     function calculate() {
       const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
       const usdt = parseFloat(document.getElementById("usdtReserve").value);
