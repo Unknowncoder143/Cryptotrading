@@ -6,6 +6,7 @@
   <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  
   <style>
     /* Same styles as before */
   </style>
@@ -49,6 +50,7 @@
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
     <button onclick="executeSwap()">Execute Swap</button>
+    <button onclick="estimateNetworkFee()">Estimate Network Fee</button>
 
     <h3>Swap Result</h3>
     <div id="result">Please load reserves to begin.</div>
@@ -75,6 +77,7 @@
       }
     }
 
+    // Fetch the pool reserves
     async function fetchReserves() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -85,7 +88,7 @@
         bsc: "https://bsc-dataseed.binance.org/"
       };
 
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network])); // Create a new web3 instance for each network
 
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
@@ -98,12 +101,12 @@
       ];
 
       try {
-        const pool = new web3.eth.Contract(poolAbi, poolAddress);
+        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
         const token0Addr = await pool.methods.token0().call();
         const token1Addr = await pool.methods.token1().call();
 
-        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
+        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
 
         const [bal0, dec0] = await Promise.all([
           token0.methods.balanceOf(poolAddress).call(),
@@ -131,6 +134,49 @@
       }
     }
 
+    // Estimate network fee
+    async function estimateNetworkFee() {
+      if (!web3 || !userAddress) {
+        alert('Please connect your wallet first.');
+        return;
+      }
+
+      const poolAddress = document.getElementById("poolAddress").value;
+      const amount = document.getElementById("amount").value;
+
+      const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
+
+      const poolAbi = [
+        {
+          "constant": false,
+          "inputs": [
+            { "name": "amountIn", "type": "uint256" }
+          ],
+          "name": "swap",
+          "outputs": [{ "name": "success", "type": "bool" }],
+          "payable": true,
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+
+      const pool = new web3.eth.Contract(poolAbi, poolAddress);
+
+      try {
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasEstimate = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
+
+        const feeInWei = gasPrice * gasEstimate;
+        const feeInEther = web3.utils.fromWei(feeInWei.toString(), 'ether');
+
+        document.getElementById("result").innerHTML += `<br><b>Estimated Network Fee:</b> ${feeInEther} ETH`;
+      } catch (err) {
+        alert('Error estimating the network fee. Please try again.');
+        console.error(err);
+      }
+    }
+
+    // Execute swap transaction
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -162,19 +208,7 @@
       const pool = new web3.eth.Contract(poolAbi, contractAddress);
 
       try {
-        // Estimate gas fee for the transaction
-        const gasEstimate = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
-
-        // Optionally, set a gas price based on the network
-        const gasPrice = await web3.eth.getGasPrice(); // Fetches the current gas price from the network
-
-        // Send the transaction with the estimated gas and gas price
-        await pool.methods.swap(amountInWei).send({
-          from: userAddress,
-          gas: gasEstimate,
-          gasPrice: gasPrice
-        });
-
+        await pool.methods.swap(amountInWei).send({ from: userAddress });
         alert('Swap successful!');
       } catch (err) {
         console.error('Error during swap:', err);
@@ -182,6 +216,7 @@
       }
     }
 
+    // Calculate swap result
     function calculate() {
       const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
       const usdt = parseFloat(document.getElementById("usdtReserve").value);
