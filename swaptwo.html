@@ -6,56 +6,64 @@
   <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
   <style>
+    /* Add styles for UI elements */
     body {
       font-family: 'Inter', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f5f5f5;
+      padding: 20px;
+      background-color: #f5f5f5;
+      color: #333;
     }
     .container {
       max-width: 600px;
-      margin: 30px auto;
+      margin: 0 auto;
       padding: 20px;
-      background: white;
+      background: #fff;
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
     h2 {
       text-align: center;
-      font-weight: 600;
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
-      font-size: 16px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
+      font-size: 24px;
+      margin-bottom: 20px;
     }
     button {
-      background-color: #4CAF50;
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      background-color: #007bff;
       color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
       cursor: pointer;
     }
     button:hover {
-      background-color: #45a049;
+      background-color: #0056b3;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    h3 {
+      text-align: center;
+      font-size: 18px;
     }
     #result {
-      background-color: #f1f1f1;
-      padding: 10px;
-      border-radius: 5px;
-      font-weight: bold;
+      margin-top: 20px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>WBTC-USDT Pool Swap</h2>
+    <h2>WBTC-USDT Pool Calculator</h2>
     <button onclick="connectWallet()">Connect Wallet</button>
 
-    <label for="network">Select Network</label>
+    <label for="network">Network</label>
     <select id="network">
       <option value="polygon">Polygon</option>
       <option value="ethereum">Ethereum</option>
@@ -103,6 +111,7 @@
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
+          // Request account access
           const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
           userAddress = accounts[0];
           document.querySelector('button').innerText = `Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
@@ -114,7 +123,7 @@
       }
     }
 
-    // Fetch Reserves from the Pool Contract
+    // Fetch reserves
     async function fetchReserves() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -125,7 +134,7 @@
         bsc: "https://bsc-dataseed.binance.org/"
       };
 
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
@@ -138,12 +147,12 @@
       ];
 
       try {
-        const pool = new web3.eth.Contract(poolAbi, poolAddress);
+        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
         const token0Addr = await pool.methods.token0().call();
         const token1Addr = await pool.methods.token1().call();
 
-        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
+        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
 
         const [bal0, dec0] = await Promise.all([
           token0.methods.balanceOf(poolAddress).call(),
@@ -171,7 +180,7 @@
       }
     }
 
-    // Estimate gas and send transaction
+    // Execute swap
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -203,14 +212,17 @@
       const pool = new web3.eth.Contract(poolAbi, contractAddress);
 
       try {
+        // Estimate gas before sending the transaction
+        const gasEstimate = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
         const gasPrice = await web3.eth.getGasPrice();
-        const gasLimit = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
 
+        // Send the transaction with estimated gas
         await pool.methods.swap(amountInWei).send({
           from: userAddress,
-          gas: gasLimit,
+          gas: gasEstimate,
           gasPrice: gasPrice
         });
+
         alert('Swap successful!');
       } catch (err) {
         console.error('Error during swap:', err);
@@ -218,34 +230,47 @@
       }
     }
 
-    // Perform the swap calculation
+    // Calculate swap result
     function calculate() {
       const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
       const usdt = parseFloat(document.getElementById("usdtReserve").value);
       const amt = parseFloat(document.getElementById("amount").value);
-      const slippage = parseFloat(document.getElementById("slippage").value) / 100;
-      const fee = parseFloat(document.getElementById("fee").value) / 100;
+      const dir = document.getElementById("direction").value;
+      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
 
-      let outputAmount;
+      const feeAmount = amt * feeRate;
+      const amtInWithFee = amt - feeAmount;
 
-      const direction = document.getElementById("direction").value;
-      if (direction === "usdtToWbtc") {
-        // Calculate how much WBTC we get for a given amount of USDT (price slippage included)
-        const price = wbtc / usdt;
-        const slippageAdjusted = price * (1 + slippage);
-        outputAmount = amt * slippageAdjusted;
-      } else if (direction === "wbtcToUsdt") {
-        // Calculate how much USDT we get for a given amount of WBTC (price slippage included)
-        const price = usdt / wbtc;
-        const slippageAdjusted = price * (1 + slippage);
-        outputAmount = amt * slippageAdjusted;
+      let output = "";
+
+      if (dir === "usdtToWbtc") {
+        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
+        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
+        const minReceived = wbtcOut * (1 - slippageRate);
+
+        output += `Fee deducted: <b>${feeAmount.toFixed(2)} USDT</b><br>`;
+        output += `You receive: <b>${wbtcOut.toFixed(8)} WBTC</b><br>`;
+        output += `Min received after slippage: <b>${minReceived.toFixed(8)} WBTC</b><br>`;
+        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
+        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
+      } else {
+        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
+        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
+        const minReceived = usdtOut * (1 - slippageRate);
+
+        output += `Fee deducted: <b>${feeAmount.toFixed(8)} WBTC</b><br>`;
+        output += `You receive: <b>${usdtOut.toFixed(2)} USDT</b><br>`;
+        output += `Min received after slippage: <b>${minReceived.toFixed(2)} USDT</b><br>`;
+        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
+        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
       }
 
-      // Deduct the fee
-      outputAmount -= outputAmount * fee;
-
-      // Display the result
-      document.getElementById("result").innerText = `You will receive approximately: ${outputAmount.toFixed(6)} ${direction === "usdtToWbtc" ? "WBTC" : "USDT"}`;
+      document.getElementById("result").innerHTML = output;
     }
   </script>
 </body>
