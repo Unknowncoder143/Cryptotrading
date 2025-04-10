@@ -6,82 +6,18 @@
   <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  
+
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: 'Inter', sans-serif;
-    }
-
-    body {
-      margin: 0;
-      padding: 40px 20px;
-      background: #f9f9fb;
-      color: #333;
-    }
-
-    .container {
-      max-width: 500px;
-      background: #fff;
-      margin: auto;
-      padding: 30px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
-      border-radius: 16px;
-    }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 24px;
-      color: #222;
-    }
-
-    label {
-      font-weight: 600;
-      margin-top: 12px;
-      display: block;
-    }
-
-    input, select {
-      width: 100%;
-      padding: 10px;
-      margin-top: 6px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      margin-top: 16px;
-      padding: 12px;
-      border: none;
-      background: #2c3e50;
-      color: white;
-      font-weight: 600;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    button:hover {
-      background: #1a252f;
-    }
-
-    #result {
-      margin-top: 20px;
-      background: #f4f7fa;
-      padding: 16px;
-      border-radius: 10px;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    h3 {
-      text-align: center;
-      margin-top: 32px;
-      font-weight: 600;
-    }
+    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    body { margin: 0; padding: 40px 20px; background: #f9f9fb; color: #333; }
+    .container { max-width: 500px; background: #fff; margin: auto; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); border-radius: 16px; }
+    h2 { text-align: center; margin-bottom: 24px; color: #222; }
+    label { font-weight: 600; margin-top: 12px; display: block; }
+    input, select { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+    button { width: 100%; margin-top: 16px; padding: 12px; border: none; background: #2c3e50; color: white; font-weight: 600; font-size: 16px; border-radius: 8px; cursor: pointer; transition: background 0.2s ease; }
+    button:hover { background: #1a252f; }
+    #result { margin-top: 20px; background: #f4f7fa; padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.5; }
+    h3 { text-align: center; margin-top: 32px; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -119,17 +55,75 @@
     <label for="usdtReserve">USDT Reserve</label>
     <input type="number" id="usdtReserve" readonly>
 
+    <button onclick="connectWallet()">Connect Wallet</button>
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
     <button onclick="estimateNetworkFee()">Estimate Network Fee</button>
-    <button onclick="executeSwap()">Execute Swap</button>
 
     <h3>Swap Result</h3>
     <div id="result">Please load reserves to begin.</div>
   </div>
 
   <script>
+    let web3;
+    let userAddress;
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        try {
+          // Request wallet connection
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          web3 = new Web3(window.ethereum);
+          const chainId = await web3.eth.getChainId();
+
+          // Switch to Polygon if not already connected
+          if (chainId !== 137) {
+            try {
+              await window.ethereum.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: '0x89' }] // Polygon Mainnet Chain ID
+              });
+            } catch (switchError) {
+              if (switchError.code === 4902) {
+                await window.ethereum.request({
+                  method: "wallet_addEthereumChain",
+                  params: [
+                    {
+                      chainId: '0x89',
+                      chainName: 'Polygon Mainnet',
+                      rpcUrls: ['https://polygon-rpc.com'],
+                      nativeCurrency: {
+                        name: 'MATIC',
+                        symbol: 'MATIC',
+                        decimals: 18
+                      },
+                      blockExplorerUrls: ['https://polygonscan.com']
+                    }
+                  ]
+                });
+              }
+            }
+          }
+
+          // Get user address
+          const accounts = await web3.eth.getAccounts();
+          userAddress = accounts[0];
+          document.getElementById("result").innerText = `Connected as: ${userAddress}`;
+        } catch (err) {
+          document.getElementById("result").innerText = "Failed to connect wallet.";
+          console.error(err);
+        }
+      } else {
+        alert("Please install MetaMask to use this feature.");
+      }
+    }
+
     async function fetchReserves() {
+      if (!web3) {
+        document.getElementById("result").innerText = "Please connect your wallet first.";
+        return;
+      }
+
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
 
@@ -139,8 +133,7 @@
         bsc: "https://bsc-dataseed.binance.org/"
       };
 
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
-
+      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
         { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
@@ -152,12 +145,12 @@
       ];
 
       try {
-        const pool = new web3.eth.Contract(poolAbi, poolAddress);
+        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
         const token0Addr = await pool.methods.token0().call();
         const token1Addr = await pool.methods.token1().call();
 
-        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
+        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
 
         const [bal0, dec0] = await Promise.all([
           token0.methods.balanceOf(poolAddress).call(),
@@ -184,111 +177,6 @@
         console.error(err);
       }
     }
-
-    function calculate() {
-      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
-      const usdt = parseFloat(document.getElementById("usdtReserve").value);
-      const amt = parseFloat(document.getElementById("amount").value);
-      const dir = document.getElementById("direction").value;
-      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
-      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
-
-      const feeAmount = amt * feeRate;
-      const amtInWithFee = amt - feeAmount;
-
-      let output = "";
-
-      if (dir === "usdtToWbtc") {
-        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
-        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
-        const minReceived = wbtcOut * (1 - slippageRate);
-
-        output += `Fee deducted: <b>${feeAmount.toFixed(2)} USDT</b><br>`;
-        output += `You receive: <b>${wbtcOut.toFixed(8)} WBTC</b><br>`;
-        output += `Min received after slippage: <b>${minReceived.toFixed(8)} WBTC</b><br>`;
-        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
-        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
-      } else {
-        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
-        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
-        const minReceived = usdtOut * (1 - slippageRate);
-
-        output += `Fee deducted: <b>${feeAmount.toFixed(8)} WBTC</b><br>`;
-        output += `You receive: <b>${usdtOut.toFixed(2)} USDT</b><br>`;
-        output += `Min received after slippage: <b>${minReceived.toFixed(2)} USDT</b><br>`;
-        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
-        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
-      }
-
-      document.getElementById("result").innerHTML = output;
-    }
-
-    async function estimateNetworkFee() {
-      const network = document.getElementById("network").value;
-      const rpcUrls = {
-        polygon: "https://polygon-rpc.com",
-        ethereum: "https://cloudflare-eth.com",
-        bsc: "https://bsc-dataseed.binance.org/"
-      };
-
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
-
-      try {
-        const gasPrice = await web3.eth.getGasPrice();
-        const gasEstimate = 200000; // This is just a placeholder. Actual gas estimate can vary based on the transaction.
-        const networkFee = (gasPrice * gasEstimate) / 10 ** 18; // Convert from Wei to Ether or Token
-
-        document.getElementById("result").innerHTML += `<br>Estimated Network Fee: <b>${networkFee.toFixed(6)} ETH</b>`;
-      } catch (err) {
-        document.getElementById("result").innerText = "Error estimating network fee. Please check your connection.";
-        console.error(err);
-      }
-    }
-
-    async function executeSwap() {
-      const network = document.getElementById("network").value;
-      const poolAddress = document.getElementById("poolAddress").value;
-
-      const rpcUrls = {
-        polygon: "https://polygon-rpc.com",
-        ethereum: "https://cloudflare-eth.com",
-        bsc: "https://bsc-dataseed.binance.org/"
-      };
-
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
-      const userAddress = "0xYourAddressHere"; // Replace with actual wallet address
-
-      const poolAbi = [
-        { "inputs": [], "name": "swap", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
-      ];
-
-      const pool = new web3.eth.Contract(poolAbi, poolAddress);
-
-      const amount = parseFloat(document.getElementById("amount").value);
-      const direction = document.getElementById("direction").value;
-
-      if (direction === "usdtToWbtc") {
-        try {
-          await pool.methods.swap(amount).send({ from: userAddress });
-          document.getElementById("result").innerText = "Swap executed successfully!";
-        } catch (err) {
-          document.getElementById("result").innerText = "Error executing swap.";
-          console.error(err);
-        }
-      } else if (direction === "wbtcToUsdt") {
-        try {
-          await pool.methods.swap(amount).send({ from: userAddress });
-          document.getElementById("result").innerText = "Swap executed successfully!";
-        } catch (err) {
-          document.getElementById("result").innerText = "Error executing swap.";
-          console.error(err);
-        }
-      }
-    }
   </script>
 </body>
-</html>:
+</html>
