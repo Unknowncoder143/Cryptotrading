@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Transaction Preview for Executive Trigger</title>
+  <title>WBTC to USDT Swap on Polygon</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.6.6/dist/umd/index.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -87,7 +87,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>Transaction Preview for Executive Trigger</h2>
+    <h2>WBTC to USDT Swap on Polygon</h2>
 
     <!-- WalletConnect Button -->
     <button id="connectButton" onclick="connectWallet()">Connect Wallet</button>
@@ -95,46 +95,32 @@
     <label for="network">Network</label>
     <select id="network">
       <option value="polygon">Polygon</option>
-      <option value="ethereum">Ethereum</option>
-      <option value="bsc">Binance Smart Chain</option>
     </select>
 
-    <label for="contractAddress">Contract Address</label>
-    <input type="text" id="contractAddress" placeholder="Enter Contract Address">
-
-    <label for="method">Method (Function)</label>
-    <input type="text" id="method" placeholder="Enter method name (e.g., triggerAction)">
-
-    <label for="params">Parameters (JSON)</label>
-    <input type="text" id="params" placeholder='Enter params as JSON (e.g., {"param1": "value1", "param2": "value2"})'>
-
     <label for="amountToSwap">Amount to Swap</label>
-    <input type="number" id="amountToSwap" placeholder="Enter amount to swap">
+    <input type="number" id="amountToSwap" placeholder="Enter amount to swap (in WBTC or USDT)">
 
-    <button onclick="previewTransaction()">Preview Transaction</button>
+    <button onclick="swapTokens()">Swap Tokens</button>
 
     <h3>Transaction Preview</h3>
-    <div id="transactionPreview">Please fill the contract details to preview the transaction.</div>
-
-    <!-- New button for executing the trigger -->
-    <button onclick="executeTransaction()">Execute Trigger</button>
+    <div id="transactionPreview">Please fill in the details to preview the transaction.</div>
   </div>
 
   <script>
-    let contract, methodName, params, web3, currentProvider;
-    let userAddress;
+    let web3, userAddress, currentProvider;
+    const WBTC_ADDRESS = "0x1BFD67037B42Cf73acF2047067BD4F2C47D9BfD6"; // WBTC address on Polygon
+    const USDT_ADDRESS = "0xA0b86991C6218B36c1d19D4A2e9eb0ce3606eC1f"; // USDT address on Polygon
+    const QUICKSWAP_ROUTER_ADDRESS = "0xa5e0829d9d4e19c2f57e5f8c0209a40bb5016073"; // QuickSwap Router on Polygon
 
     async function connectWallet() {
       const provider = new WalletConnectProvider({
         rpc: {
-          1: "https://cloudflare-eth.com", // Ethereum Mainnet
-          137: "https://polygon-rpc.com",  // Polygon
-          56: "https://bsc-dataseed.binance.org/" // Binance Smart Chain
+          137: "https://polygon-rpc.com" // Polygon RPC URL
         }
       });
 
       try {
-        await provider.enable(); // Connect to the wallet
+        await provider.enable(); // Connect to wallet
         web3 = new Web3(provider);
         currentProvider = provider;
 
@@ -144,104 +130,81 @@
         document.getElementById("connectButton").innerText = `Connected: ${userAddress}`;
       } catch (error) {
         console.error(error);
-        alert("Failed to connect to wallet.");
+        alert("Failed to connect wallet.");
       }
     }
 
-    async function previewTransaction() {
-      const network = document.getElementById("network").value;
-      const contractAddress = document.getElementById("contractAddress").value;
-      methodName = document.getElementById("method").value;
-      params = JSON.parse(document.getElementById("params").value || '{}');
+    async function swapTokens() {
       const amountToSwap = document.getElementById("amountToSwap").value;
-
-      const rpcUrls = {
-        polygon: "https://polygon-rpc.com",
-        ethereum: "https://cloudflare-eth.com",
-        bsc: "https://bsc-dataseed.binance.org/"
-      };
-
-      if (!web3) {
+      if (!web3 || !userAddress) {
         alert("Please connect your wallet first.");
         return;
       }
 
+      const tokenInAddress = WBTC_ADDRESS;  // WBTC as input token
+      const tokenOutAddress = USDT_ADDRESS;  // USDT as output token
+
+      const amountIn = web3.utils.toWei(amountToSwap, 'ether');  // Convert amount to wei
+
       try {
-        const contractAbi = await fetchAbi(contractAddress); // Fetch contract ABI
-        contract = new web3.eth.Contract(contractAbi, contractAddress);
+        const contract = new web3.eth.Contract([
+          // QuickSwap Router ABI (simplified)
+          {
+            "constant": false,
+            "inputs": [
+              { "name": "tokenIn", "type": "address" },
+              { "name": "tokenOut", "type": "address" },
+              { "name": "amountIn", "type": "uint256" },
+              { "name": "amountOutMin", "type": "uint256" },
+              { "name": "to", "type": "address" },
+              { "name": "deadline", "type": "uint256" }
+            ],
+            "name": "swapExactTokensForTokens",
+            "outputs": [
+              { "name": "amounts", "type": "uint256[]" }
+            ],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ], QUICKSWAP_ROUTER_ADDRESS);
 
-        // Estimate Gas
-        const estimatedGas = await contract.methods[methodName](...Object.values(params)).estimateGas();
-        const gasPrice = await web3.eth.getGasPrice();
-        const networkFee = web3.utils.fromWei((gasPrice * estimatedGas).toString(), 'ether');
+        // Approve token transfer
+        const tokenContract = new web3.eth.Contract([
+          // ERC20 ABI for approve method
+          {
+            "constant": false,
+            "inputs": [
+              { "name": "spender", "type": "address" },
+              { "name": "amount", "type": "uint256" }
+            ],
+            "name": "approve",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ], tokenInAddress);
 
-        // Show transaction preview
-        const previewText = `
-          <strong>From Address:</strong> ${userAddress}<br>
-          <strong>To Address:</strong> ${contractAddress}<br>
-          <strong>Method:</strong> ${methodName}(${JSON.stringify(params)})<br>
-          <strong>Amount to Swap:</strong> ${amountToSwap} ETH<br>
-          <strong>Estimated Gas:</strong> ${estimatedGas}<br>
-          <strong>Gas Price:</strong> ${web3.utils.fromWei(gasPrice, 'gwei')} Gwei<br>
-          <strong>Estimated Network Fee:</strong> ${networkFee} ETH<br>
-          <strong>Transaction Data:</strong> ${contract.methods[methodName](...Object.values(params)).encodeABI()}
-        `;
+        await tokenContract.methods.approve(QUICKSWAP_ROUTER_ADDRESS, amountIn).send({ from: userAddress });
 
-        document.getElementById("transactionPreview").innerHTML = previewText;
-      } catch (err) {
-        console.error(err);
-        document.getElementById("transactionPreview").innerHTML = "Error previewing transaction.";
+        // Perform swap
+        const amountOutMin = 0; // Set slippage tolerance (can be adjusted)
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20-minute deadline
+
+        const tx = await contract.methods.swapExactTokensForTokens(
+          amountIn,
+          amountOutMin,
+          [tokenInAddress, tokenOutAddress],
+          userAddress,
+          deadline
+        ).send({ from: userAddress });
+
+        alert("Swap successful! Tx Hash: " + tx.transactionHash);
+      } catch (error) {
+        console.error(error);
+        alert("Swap failed. Please try again.");
       }
-    }
-
-    async function executeTransaction() {
-      if (!contract || !web3) {
-        alert("Please connect wallet and preview the transaction first.");
-        return;
-      }
-
-      const amountToSwap = document.getElementById("amountToSwap").value;
-
-      // Confirm execution
-      if (confirm(`Are you sure you want to swap ${amountToSwap} ETH?`)) {
-        try {
-          const estimatedGas = await contract.methods[methodName](...Object.values(params)).estimateGas();
-          const gasPrice = await web3.eth.getGasPrice();
-
-          // Execute transaction
-          const tx = await contract.methods[methodName](...Object.values(params)).send({
-            from: userAddress,
-            value: web3.utils.toWei(amountToSwap, 'ether'), // Send amount to swap
-            gas: estimatedGas,
-            gasPrice
-          });
-
-          alert("Transaction successful! Tx Hash: " + tx.transactionHash);
-        } catch (err) {
-          console.error(err);
-          alert("Transaction failed. Please try again.");
-        }
-      }
-    }
-
-    // Function to fetch ABI (You can replace this with a proper method or service)
-    async function fetchAbi(contractAddress) {
-      // Fetch ABI from a public source or local storage
-      return [
-        // Example ABI
-        {
-          "constant": false,
-          "inputs": [
-            { "name": "param1", "type": "string" },
-            { "name": "param2", "type": "uint256" }
-          ],
-          "name": "triggerAction",
-          "outputs": [],
-          "payable": false,
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }
-      ];
     }
   </script>
 </body>
