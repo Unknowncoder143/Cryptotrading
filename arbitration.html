@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WBTC/USDT Live Price</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+</head>
+<body>
+  <h2>WBTC/USDT Price from Uniswap</h2>
+  <p id="output">Fetching...</p>
+
+  <script>
+    window.addEventListener('load', async () => {
+      const web3 = new Web3(new Web3.providers.HttpProvider('https://polygon-rpc.com'));
+      const poolAddress = "0x33016df701b323c33cc027146c6a9e0997b2a923";
+
+      const abi = [{
+        "inputs": [],
+        "name": "slot0",
+        "outputs": [
+          { "internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160" },
+          { "internalType": "int24", "name": "tick", "type": "int24" },
+          { "internalType": "uint16", "name": "observationIndex", "type": "uint16" },
+          { "internalType": "uint16", "name": "observationCardinality", "type": "uint16" },
+          { "internalType": "uint16", "name": "observationCardinalityNext", "type": "uint16" },
+          { "internalType": "uint8", "name": "feeProtocol", "type": "uint8" },
+          { "internalType": "bool", "name": "unlocked", "type": "bool" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }];
+
+      try {
+        const contract = new web3.eth.Contract(abi, poolAddress);
+        const slot0 = await contract.methods.slot0().call();
+
+        const sqrtPriceX96 = BigInt(slot0.sqrtPriceX96);
+        const decimalFactor = BigInt(2) ** BigInt(96);
+        const price = Number(sqrtPriceX96 * sqrtPriceX96) / Number(decimalFactor * decimalFactor);
+
+        // Adjust for token decimals: WBTC (8), USDT (6) => 10^(8-6) = 100
+        const adjustedPrice = price * 1e2;
+
+        document.getElementById("output").innerText = 
+          "1 WBTC ≈ " + adjustedPrice.toFixed(2) + " USDT";
+
+      } catch (e) {
+        document.getElementById("output").innerText = "Error: " + e.message;
+      }
+    });
+  </script>
+</body>
+</html>
