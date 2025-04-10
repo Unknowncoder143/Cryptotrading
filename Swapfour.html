@@ -95,7 +95,7 @@
 
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
-    <button onclick="confirmSwap()">Confirm Swap</button>
+    <button onclick="confirmSwap()">Execute Swap</button>
 
     <div class="result">
       <h3>Swap Result</h3>
@@ -267,19 +267,34 @@
         await pool.methods.swap(amountInWei).send({ from: userAddress });
         alert('Swap successful!');
       } catch (err) {
+        console.error('Error during swap} catch (err) {
         console.error('Error during swap:', err);
-        alert('Swap failed. Please try again.');
+        alert('Swap failed. Please check the console for more details.');
       }
     }
 
+    // Execute swap button handler
     function confirmSwap() {
-      const confirmation = confirm("Are you sure you want to proceed with the swap?");
-      if (confirmation) {
-        executeSwap();
+      const network = document.getElementById("network").value;
+      const direction = document.getElementById("direction").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+
+      if (amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+      }
+
+      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
+
+      if (direction === "usdtToWbtc") {
+        executeSwap(); // Execute the swap for USDT to WBTC
+      } else if (direction === "wbtcToUsdt") {
+        executeSwap(); // Execute the swap for WBTC to USDT
       } else {
-        alert('Swap canceled');
+        alert("Please select a valid swap direction.");
       }
     }
   </script>
 </body>
-  </html>
+</html>
