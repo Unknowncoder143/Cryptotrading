@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Contract Interaction</title>
+</head>
+<body>
+    <h1>Trigger Smart Contract Function</h1>
+    <button id="triggerContract">Execute Contract Function</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.6.0/dist/web3.min.js"></script>
+    <script>
+        // This will trigger when the button is clicked
+        document.getElementById("triggerContract").onclick = async function() {
+            try {
+                if (window.ethereum) {
+                    // Initialize web3 with the browser's Ethereum provider (MetaMask)
+                    const web3 = new Web3(window.ethereum);
+                    await window.ethereum.enable(); // Request access to the user's Ethereum account
+
+                    // Set up contract details
+                    const contractABI = [
+                        // Example ABI for a contract function (replace with your actual ABI)
+                        {
+                            "constant": false,
+                            "inputs": [],
+                            "name": "triggerFunction",
+                            "outputs": [],
+                            "payable": false,
+                            "stateMutability": "nonpayable",
+                            "type": "function"
+                        }
+                    ];
+                    const contractAddress = '0xYourContractAddress'; // Replace with your contract's address
+                    const contract = new web3.eth.Contract(contractABI, contractAddress);
+
+                    // Get the user's Ethereum account
+                    const accounts = await web3.eth.getAccounts();
+
+                    // Call the contract's method
+                    const response = await contract.methods.triggerFunction().send({ from: accounts[0] });
+
+                    console.log('Transaction successful:', response);
+                    alert('Function triggered successfully!');
+                } else {
+                    alert("Ethereum provider not found. Please install MetaMask.");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while executing the contract function.');
+            }
+        };
+    </script>
+</body>
+</html>
