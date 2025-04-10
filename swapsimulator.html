@@ -121,6 +121,7 @@
 
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
+    <button onclick="estimateNetworkFee()">Estimate Network Fee</button>
 
     <h3>Swap Result</h3>
     <div id="result">Please load reserves to begin.</div>
@@ -223,6 +224,41 @@
       }
 
       document.getElementById("result").innerHTML = output;
+    }
+
+    async function estimateNetworkFee() {
+      const network = document.getElementById("network").value;
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
+
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+
+      try {
+        // Get the current gas price
+        const gasPrice = await web3.eth.getGasPrice();
+
+        // Estimate gas for a simple transaction, like calling `balanceOf`
+        const sampleAddress = "0x0000000000000000000000000000000000000000"; // Sample address for balanceOf call
+        const erc20Abi = [
+          { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" }
+        ];
+
+        const token = new web3.eth.Contract(erc20Abi, sampleAddress);
+        const estimatedGas = await token.methods.balanceOf(sampleAddress).estimateGas();
+
+        const networkFee = estimatedGas * gasPrice;
+
+        // Convert the fee to a more readable format (ETH, MATIC, BNB)
+        const networkFeeInEth = web3.utils.fromWei(networkFee.toString(), 'ether');
+
+        document.getElementById("result").innerHTML += `<br>Estimated Network Fee: <b>${networkFeeInEth} ${network === 'polygon' ? 'MATIC' : network === 'ethereum' ? 'ETH' : 'BNB'}</b>`;
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").innerHTML += "<br>Error estimating network fee.";
+      }
     }
   </script>
 </body>
