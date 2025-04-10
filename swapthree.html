@@ -6,7 +6,7 @@
   <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
+  
   <style>
     * {
       box-sizing: border-box;
@@ -238,88 +238,57 @@
       const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
       try {
-        // Get the current gas price
         const gasPrice = await web3.eth.getGasPrice();
+        const gasEstimate = 200000; // This is just a placeholder. Actual gas estimate can vary based on the transaction.
+        const networkFee = (gasPrice * gasEstimate) / 10 ** 18; // Convert from Wei to Ether or Token
 
-        // Estimate gas for a simple transaction, like calling `balanceOf`
-        const sampleAddress = "0x0000000000000000000000000000000000000000"; // Sample address for balanceOf call
-        const erc20Abi = [
-          { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" }
-        ];
-
-        const token = new web3.eth.Contract(erc20Abi, sampleAddress);
-        const estimatedGas = await token.methods.balanceOf(sampleAddress).estimateGas();
-
-        const networkFee = estimatedGas * gasPrice;
-
-        // Convert the fee to a more readable format (ETH, MATIC, BNB)
-        const networkFeeInEth = web3.utils.fromWei(networkFee.toString(), 'ether');
-
-        document.getElementById("result").innerHTML += `<br>Estimated Network Fee: <b>${networkFeeInEth} ${network === 'polygon' ? 'MATIC' : network === 'ethereum' ? 'ETH' : 'BNB'}</b>`;
+        document.getElementById("result").innerHTML += `<br>Estimated Network Fee: <b>${networkFee.toFixed(6)} ETH</b>`;
       } catch (err) {
+        document.getElementById("result").innerText = "Error estimating network fee. Please check your connection.";
         console.error(err);
-        document.getElementById("result").innerHTML += "<br>Error estimating network fee.";
       }
     }
 
     async function executeSwap() {
-      const network =
+      const network = document.getElementById("network").value;
+      const poolAddress = document.getElementById("poolAddress").value;
 
-async function executeSwap() {
-        const network = document.getElementById("network").value;
-        const poolAddress = document.getElementById("poolAddress").value;
-        const amount = parseFloat(document.getElementById("amount").value);
-        const direction = document.getElementById("direction").value;
-        const userAddress = "0xYourWalletAddress";  // Replace with the user's wallet address
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
 
-        const rpcUrls = {
-          polygon: "https://polygon-rpc.com",
-          ethereum: "https://cloudflare-eth.com",
-          bsc: "https://bsc-dataseed.binance.org/"
-        };
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const userAddress = "0xYourAddressHere"; // Replace with actual wallet address
 
-        const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const poolAbi = [
+        { "inputs": [], "name": "swap", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
+      ];
 
-        const erc20Abi = [
-          { "constant": false, "name": "transfer", "inputs": [{ "name": "to", "type": "address" }, { "name": "value", "type": "uint256" }], "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
-        ];
+      const pool = new web3.eth.Contract(poolAbi, poolAddress);
 
-        const poolAbi = [
-          { "inputs": [], "name": "swap", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
-        ];
+      const amount = parseFloat(document.getElementById("amount").value);
+      const direction = document.getElementById("direction").value;
 
+      if (direction === "usdtToWbtc") {
         try {
-          const pool = new web3.eth.Contract(poolAbi, poolAddress);
-          const token0 = new web3.eth.Contract(erc20Abi, await pool.methods.token0().call());
-          const token1 = new web3.eth.Contract(erc20Abi, await pool.methods.token1().call());
-
-          let transaction;
-          
-          if (direction === "usdtToWbtc") {
-            // Call the swap function for USDT to WBTC
-            transaction = pool.methods.swap(0, amount * 1e6, userAddress);
-          } else {
-            // Call the swap function for WBTC to USDT
-            transaction = pool.methods.swap(amount * 1e8, 0, userAddress);
-          }
-
-          // Estimate gas for the transaction
-          const gasEstimate = await transaction.estimateGas({ from: userAddress });
-
-          // Send the transaction
-          const tx = await transaction.send({
-            from: userAddress,
-            gas: gasEstimate,
-            gasPrice: await web3.eth.getGasPrice(),
-          });
-
-          document.getElementById("result").innerHTML += `<br>Swap executed successfully! Transaction Hash: <a href="https://polygonscan.com/tx/${tx.transactionHash}" target="_blank">${tx.transactionHash}</a>`;
+          await pool.methods.swap(amount).send({ from: userAddress });
+          document.getElementById("result").innerText = "Swap executed successfully!";
         } catch (err) {
+          document.getElementById("result").innerText = "Error executing swap.";
           console.error(err);
-          document.getElementById("result").innerHTML += "<br>Error executing swap.";
+        }
+      } else if (direction === "wbtcToUsdt") {
+        try {
+          await pool.methods.swap(amount).send({ from: userAddress });
+          document.getElementById("result").innerText = "Swap executed successfully!";
+        } catch (err) {
+          document.getElementById("result").innerText = "Error executing swap.";
+          console.error(err);
         }
       }
+    }
   </script>
 </body>
-</html>
-      
+</html>:
