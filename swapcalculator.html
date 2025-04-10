@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WBTC-USDT Swap Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: #f9f9fb;
+      color: #333;
+    }
+
+    .container {
+      max-width: 500px;
+      background: #fff;
+      margin: auto;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      border-radius: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 24px;
+      color: #222;
+    }
+
+    label {
+      font-weight: 600;
+      margin-top: 12px;
+      display: block;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      border: none;
+      background: #2c3e50;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #1a252f;
+    }
+
+    #transactionPreview {
+      margin-top: 20px;
+      background: #f4f7fa;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    h3 {
+      text-align: center;
+      margin-top: 32px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>WBTC-USDT Pool Calculator</h2>
+
+    <label for="network">Network</label>
+    <select id="network">
+      <option value="polygon">Polygon</option>
+      <option value="ethereum">Ethereum</option>
+      <option value="bsc">Binance Smart Chain</option>
+    </select>
+
+    <label for="poolAddress">Pool Contract Address</label>
+    <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
+
+    <label for="direction">Swap Direction</label>
+    <select id="direction">
+      <option value="usdtToWbtc">USDT to WBTC</option>
+      <option value="wbtcToUsdt">WBTC to USDT</option>
+    </select>
+
+    <label for="amount">Amount to Swap</label>
+    <input type="number" id="amount" step="any">
+
+    <label for="fee">Fee (%)</label>
+    <input type="number" id="fee" value="0.3" step="any">
+
+    <label for="slippage">Slippage Tolerance (%)</label>
+    <input type="number" id="slippage" value="0.5" step="any">
+
+    <label for="wbtcReserve">WBTC Reserve</label>
+    <input type="number" id="wbtcReserve" readonly>
+
+    <label for="usdtReserve">USDT Reserve</label>
+    <input type="number" id="usdtReserve" readonly>
+
+    <button onclick="fetchReserves()">Load Reserves</button>
+    <button onclick="calculate()">Calculate Swap</button>
+    <button onclick="estimateNetworkFee()">Estimate Network Fee</button>
+
+    <h3>Transaction Preview</h3>
+    <div id="transactionPreview">Please load reserves to begin.</div>
+  </div>
+
+  <script>
+    async function fetchReserves() {
+      const network = document.getElementById("network").value;
+      const poolAddress = document.getElementById("poolAddress").value;
+
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
+
+      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+
+      const erc20Abi = [
+        { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
+        { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
+      ];
+
+      const poolAbi = [
+        { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
+        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
+      ];
+
+      try {
+        const pool = new web3.eth.Contract(poolAbi, poolAddress);
+        const token0Addr = await pool.methods.token0().call();
+        const token1Addr = await pool.methods.token1().call();
+
+        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
+
+        const [bal0, dec0] = await Promise.all([
+          token0.methods.balanceOf(poolAddress).call(),
+          token0.methods.decimals().call()
+        ]);
+
+        const [bal1, dec1] = await Promise.all([
+          token1.methods.balanceOf(poolAddress).call(),
+          token1.methods.decimals().call()
+        ]);
+
+        const reserve0 = Number(bal0) / 10 ** dec0;
+        const reserve1 = Number(bal1) / 10 ** dec1;
+
+        const wbtcReserve = dec0 === "8" ? reserve0 : reserve1;
+        const usdtReserve = dec0 === "6" ? reserve0 : reserve1;
+
+        document.getElementById("wbtcReserve").value = wbtcReserve;
+        document.getElementById("usdtReserve").value = usdtReserve;
+
+        document.getElementById("transactionPreview").innerText = "Reserves loaded. Ready to calculate!";
+      } catch (err) {
+        document.getElementById("transactionPreview").innerText = "Error loading reserves. Check the contract address.";
+        console.error(err);
+      }
+    }
+
+    function calculate() {
+      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
+      const usdt = parseFloat(document.getElementById("usdtReserve").value);
+      const amt = parseFloat(document.getElementById("amount").value);
+      const dir = document.getElementById("direction").value;
+      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
+
+      const feeAmount = amt * feeRate;
+      const amtInWithFee = amt - feeAmount;
+
+      let transactionPreview = "";
+
+      if (dir === "usdtToWbtc") {
+        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
+        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
+        const minReceived = wbtcOut * (1 - slippageRate);
+
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>From Address:</b> Your wallet address<br>
+          <b>To Address:</b> Pool Contract Address (${document.getElementById("poolAddress").value})<br>
+          <b>Method:</b> Swap USDT for WBTC<br>
+          <b>Amount to Swap:</b> ${amt} USDT<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(2)} USDT<br>
+          <b>You Receive:</b> ${wbtcOut.toFixed(8)} WBTC<br>
+          <b>Min Received after Slippage:</b> ${minReceived.toFixed(8)} WBTC<br>
+          <b>Price Impact:</b> ${priceImpact.toFixed(2)}%<br>
+          <b>New Price:</b> 1 WBTC ≈ ${newPrice.toFixed(2)} USDT<br>
+        `;
+      } else {
+        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
+        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
+        const minReceived = usdtOut * (1 - slippageRate);
+
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>From Address:</b> Your wallet address<br>
+          <b>To Address:</b> Pool Contract Address (${document.getElementById("poolAddress").value})<br>
+          <b>Method:</b> Swap WBTC for USDT<br>
+          <b>Amount to Swap:</b> ${amt} WBTC<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(2)} WBTC<br>
+          <b>You Receive:</b> ${usdtOut.toFixed(2)} USDT<br>
+          <b>Min Received after Slippage:</b> ${minReceived.toFixed(2)} USDT<br>
+          <b>Price Impact:</b> ${priceImpact.toFixed(2)}%<br>
+          <b>New Price:</b> 1 USDT ≈ ${newPrice.toFixed(2)} WBTC<br>
+        `;
+      }
+
+      document.getElementById("transactionPreview").innerHTML = transactionPreview;
+    }
+
+    function estimateNetworkFee() {
+      const network = document.getElementById("network").value;
+      const gasPrice = 29.7; // Example Gas Price in Gwei (can be dynamically fetched)
+      const gasLimit = 21850; // Example Gas Limit (can be dynamically fetched)
+
+      const networkFeeEth = (gasPrice * gasLimit) / 1e9; // Convert Gwei to ETH
+      const networkFeeFormatted = networkFeeEth.toFixed(6); // Formatting the fee
+
+      document.getElementById("transactionPreview").innerHTML += `<br><b>Estimated Network Fee:</b> ${networkFeeFormatted} ETH`;
+    }
+  </script>
+</body>
+      </html>
