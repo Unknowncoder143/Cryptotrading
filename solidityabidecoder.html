@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Solidity ABI Decoder – All-in-One</title>
+  <style>
+    body { font-family: monospace; background: #121212; color: #00ff88; padding: 2em; }
+    textarea, pre, input { width: 100%; background: #1e1e1e; color: #0f0; padding: 1em; border: none; margin-top: 1em; border-radius: 6px; }
+    button { background: #00ff88; color: #000; font-weight: bold; padding: 0.8em 1.2em; border: none; margin-top: 1em; cursor: pointer; }
+    h1, h2 { color: #00ff88; }
+    .section { margin-bottom: 2em; }
+    #output, #calldataOutput { overflow-x: auto; max-height: 300px; white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+
+  <h1>Solidity ABI Decoder – All-in-One</h1>
+
+  <div class="section">
+    <h2>1. Paste or Drop ABI File</h2>
+    <input type="file" id="abiFile" accept="application/json">
+    <textarea id="abiInput" rows="10" placeholder="Paste ABI JSON here..."></textarea>
+    <button onclick="decodeAbi()">Decode ABI</button>
+    <h3>Human Explanation:</h3>
+    <pre id="output">Waiting for magic...</pre>
+  </div>
+
+  <div class="section">
+    <h2>2. Live Search</h2>
+    <input type="text" id="searchInput" placeholder="Search for a function..." oninput="liveSearch()">
+    <pre id="searchResults">Type to search...</pre>
+  </div>
+
+  <div class="section">
+    <h2>3. Decode Calldata</h2>
+    <textarea id="calldataInput" rows="5" placeholder="Paste calldata (0x...) here..."></textarea>
+    <button onclick="decodeCalldata()">Decode Calldata</button>
+    <pre id="calldataOutput">Waiting for magic...</pre>
+  </div>
+
+  <script>
+    let currentAbi = [];
+
+    document.getElementById('abiFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById("abiInput").value = e.target.result;
+        decodeAbi();
+      };
+      reader.readAsText(file);
+    });
+
+    function decodeAbi() {
+      const rawAbi = document.getElementById("abiInput").value;
+      let output = '';
+
+      try {
+        currentAbi = JSON.parse(rawAbi);
+        currentAbi.forEach(fn => {
+          if (fn.type === "function") {
+            output += `Function: ${fn.name}\n`;
+            output += `What it does: ${explain(fn.name)}\n\n`;
+            output += `Inputs:\n`;
+            fn.inputs.forEach(input => {
+              output += `- ${input.name} (${input.type})\n`;
+            });
+            if (fn.outputs && fn.outputs.length > 0) {
+              output += `\nReturns:\n`;
+              fn.outputs.forEach(out => {
+                output += `- ${out.name || 'result'} (${out.type})\n`;
+              });
+            }
+            output += '\n' + '-'.repeat(40) + '\n\n';
+          }
+        });
+      } catch (e) {
+        output = 'Invalid ABI or JSON error:\n' + e.message;
+      }
+
+      document.getElementById("output").textContent = output;
+    }
+
+    function liveSearch() {
+      const term = document.getElementById("searchInput").value.toLowerCase();
+      const results = currentAbi.filter(fn => fn.name && fn.name.toLowerCase().includes(term));
+      document.getElementById("searchResults").textContent = results.map(f => f.name).join("\n") || 'No match found';
+    }
+
+    function decodeCalldata() {
+      const calldata = document.getElementById("calldataInput").value.trim();
+      if (!calldata.startsWith("0x")) return alert("Invalid calldata. Must start with 0x");
+      const sig = calldata.slice(2, 10);
+      const fn = currentAbi.find(f => f.type === "function" && keccak256(f).slice(0, 8) === sig);
+      if (!fn) return document.getElementById("calldataOutput").textContent = "Function not found in ABI";
+      document.getElementById("calldataOutput").textContent = `Function: ${fn.name}\nInputs: (${fn.inputs.map(i => i.type).join(', ')})`;
+    }
+
+    function keccak256(fn) {
+      const sig = `${fn.name}(${fn.inputs.map(i => i.type).join(',')})`;
+      const encoder = new TextEncoder();
+      const data = encoder.encode(sig);
+      return Array.from(crypto.subtle.digestSync('SHA-256', data)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 64);
+    }
+
+    function explain(name) {
+      const explanations = {
+        "swapExactTokensForTokens": "Swaps a fixed number of input tokens for output tokens.",
+        "transfer": "Transfers tokens from sender to recipient.",
+        "balanceOf": "Returns the token balance of a given address."
+      };
+      return explanations[name] || "Function description not available.";
+    }
+  </script>
+</body>
+</html>
