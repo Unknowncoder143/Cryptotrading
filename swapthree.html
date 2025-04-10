@@ -1,180 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WBTC-USDT Swap Calculator</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polygon Network Fee Estimator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
   <style>
-    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
-    body { margin: 0; padding: 40px 20px; background: #f9f9fb; color: #333; }
-    .container { max-width: 500px; background: #fff; margin: auto; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); border-radius: 16px; }
-    h2 { text-align: center; margin-bottom: 24px; color: #222; }
-    label { font-weight: 600; margin-top: 12px; display: block; }
-    input, select { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
-    button { width: 100%; margin-top: 16px; padding: 12px; border: none; background: #2c3e50; color: white; font-weight: 600; font-size: 16px; border-radius: 8px; cursor: pointer; transition: background 0.2s ease; }
-    button:hover { background: #1a252f; }
-    #result { margin-top: 20px; background: #f4f7fa; padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.5; }
-    h3 { text-align: center; margin-top: 32px; font-weight: 600; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #result {
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>WBTC-USDT Pool Calculator</h2>
-
-    <label for="network">Network</label>
-    <select id="network">
-      <option value="polygon">Polygon</option>
-      <option value="ethereum">Ethereum</option>
-      <option value="bsc">Binance Smart Chain</option>
-    </select>
-
-    <label for="poolAddress">Pool Contract Address</label>
-    <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
-
-    <label for="direction">Swap Direction</label>
-    <select id="direction">
-      <option value="usdtToWbtc">USDT to WBTC</option>
-      <option value="wbtcToUsdt">WBTC to USDT</option>
-    </select>
-
-    <label for="amount">Amount to Swap</label>
-    <input type="number" id="amount" step="any">
-
-    <label for="fee">Fee (%)</label>
-    <input type="number" id="fee" value="0.3" step="any">
-
-    <label for="slippage">Slippage Tolerance (%)</label>
-    <input type="number" id="slippage" value="0.5" step="any">
-
-    <label for="wbtcReserve">WBTC Reserve</label>
-    <input type="number" id="wbtcReserve" readonly>
-
-    <label for="usdtReserve">USDT Reserve</label>
-    <input type="number" id="usdtReserve" readonly>
-
-    <button onclick="connectWallet()">Connect Wallet</button>
-    <button onclick="fetchReserves()">Load Reserves</button>
-    <button onclick="calculate()">Calculate Swap</button>
-    <button onclick="estimateNetworkFee()">Estimate Network Fee</button>
-
-    <h3>Swap Result</h3>
-    <div id="result">Please load reserves to begin.</div>
-  </div>
+  <h1>Polygon Network Fee Estimator</h1>
+  <button onclick="estimateNetworkFee()">Estimate Fee</button>
+  <div id="result">The fee will appear here.</div>
 
   <script>
-    let web3;
-    let userAddress;
-
-    async function connectWallet() {
-      if (window.ethereum) {
-        try {
-          // Request wallet connection
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          web3 = new Web3(window.ethereum);
-          const chainId = await web3.eth.getChainId();
-
-          // Switch to Polygon if not already connected
-          if (chainId !== 137) {
-            try {
-              await window.ethereum.request({
-                method: "wallet_switchEthereumChain",
-                params: [{ chainId: '0x89' }] // Polygon Mainnet Chain ID
-              });
-            } catch (switchError) {
-              if (switchError.code === 4902) {
-                await window.ethereum.request({
-                  method: "wallet_addEthereumChain",
-                  params: [
-                    {
-                      chainId: '0x89',
-                      chainName: 'Polygon Mainnet',
-                      rpcUrls: ['https://polygon-rpc.com'],
-                      nativeCurrency: {
-                        name: 'MATIC',
-                        symbol: 'MATIC',
-                        decimals: 18
-                      },
-                      blockExplorerUrls: ['https://polygonscan.com']
-                    }
-                  ]
-                });
-              }
-            }
-          }
-
-          // Get user address
-          const accounts = await web3.eth.getAccounts();
-          userAddress = accounts[0];
-          document.getElementById("result").innerText = `Connected as: ${userAddress}`;
-        } catch (err) {
-          document.getElementById("result").innerText = "Failed to connect wallet.";
-          console.error(err);
-        }
-      } else {
-        alert("Please install MetaMask to use this feature.");
-      }
-    }
-
-    async function fetchReserves() {
-      if (!web3) {
-        document.getElementById("result").innerText = "Please connect your wallet first.";
+    async function estimateNetworkFee() {
+      if (typeof window.ethereum === 'undefined') {
+        alert('Please install MetaMask!');
         return;
       }
 
-      const network = document.getElementById("network").value;
-      const poolAddress = document.getElementById("poolAddress").value;
-
-      const rpcUrls = {
-        polygon: "https://polygon-rpc.com",
-        ethereum: "https://cloudflare-eth.com",
-        bsc: "https://bsc-dataseed.binance.org/"
-      };
-
-      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
-      const erc20Abi = [
-        { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
-        { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
-      ];
-
-      const poolAbi = [
-        { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
-        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
-      ];
+      const web3 = new Web3(window.ethereum);
 
       try {
-        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
-        const token0Addr = await pool.methods.token0().call();
-        const token1Addr = await pool.methods.token1().call();
+        // Request account access if needed
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
+        // Estimate the gas price and gas limit for a sample transaction
+        const gasPrice = await web3.eth.getGasPrice(); // Gas price in Wei
+        console.log("Gas Price (in Wei):", gasPrice);
 
-        const [bal0, dec0] = await Promise.all([
-          token0.methods.balanceOf(poolAddress).call(),
-          token0.methods.decimals().call()
-        ]);
+        // Define a sample transaction (e.g., transferring MATIC)
+        const transaction = {
+          to: '0xAddressHere', // Replace with actual address
+          value: web3.utils.toWei('0.1', 'ether'), // Example value to transfer (0.1 MATIC)
+        };
 
-        const [bal1, dec1] = await Promise.all([
-          token1.methods.balanceOf(poolAddress).call(),
-          token1.methods.decimals().call()
-        ]);
+        // Estimate gas for the transaction
+        const gasLimit = await web3.eth.estimateGas(transaction);
+        console.log("Estimated Gas Limit:", gasLimit);
 
-        const reserve0 = Number(bal0) / 10 ** dec0;
-        const reserve1 = Number(bal1) / 10 ** dec1;
+        // Calculate the estimated fee in MATIC
+        const estimatedFee = web3.utils.fromWei((gasPrice * gasLimit).toString(), 'gwei');
+        console.log("Estimated Network Fee (MATIC):", estimatedFee);
 
-        const wbtcReserve = dec0 === "8" ? reserve0 : reserve1;
-        const usdtReserve = dec0 === "6" ? reserve0 : reserve1;
-
-        document.getElementById("wbtcReserve").value = wbtcReserve;
-        document.getElementById("usdtReserve").value = usdtReserve;
-
-        document.getElementById("result").innerText = "Reserves loaded. Ready to calculate!";
+        document.getElementById("result").innerText = `Estimated Fee: ${estimatedFee} MATIC`;
       } catch (err) {
-        document.getElementById("result").innerText = "Error loading reserves. Check the contract address.";
         console.error(err);
+        document.getElementById("result").innerText = "Error estimating the fee.";
       }
     }
   </script>
