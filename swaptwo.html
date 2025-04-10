@@ -49,10 +49,14 @@
 
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
+    <button onclick="estimateGas()">Estimate Network Fee</button>
     <button onclick="executeSwap()">Execute Swap</button>
 
     <h3>Swap Result</h3>
     <div id="result">Please load reserves to begin.</div>
+
+    <h3>Estimated Gas Fee:</h3>
+    <div id="gasFee"></div>
   </div>
 
   <script>
@@ -132,7 +136,51 @@
       }
     }
 
-    // Execute Swap with adjusted gas price
+    // Estimate Gas for Swap
+    async function estimateGas() {
+      const poolAddress = document.getElementById("poolAddress").value;
+      const amount = document.getElementById("amount").value;
+      const direction = document.getElementById("direction").value;
+
+      if (!web3 || !userAddress) {
+        alert('Please connect your wallet first.');
+        return;
+      }
+
+      const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
+      const contractAddress = poolAddress;
+
+      const poolAbi = [
+        {
+          "constant": false,
+          "inputs": [
+            { "name": "amountIn", "type": "uint256" }
+          ],
+          "name": "swap",
+          "outputs": [{ "name": "success", "type": "bool" }],
+          "payable": true,
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+
+      const pool = new web3.eth.Contract(poolAbi, contractAddress);
+
+      try {
+        const gasEstimate = await pool.methods.swap(amountInWei).estimateGas({ from: userAddress });
+
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasFee = web3.utils.fromWei((gasEstimate * gasPrice).toString(), 'ether');
+
+        document.getElementById("gasFee").innerText = `Estimated Gas Fee: ${gasFee} ETH`;
+
+      } catch (err) {
+        console.error('Error estimating gas:', err);
+        alert('Failed to estimate gas. Please try again.');
+      }
+    }
+
+    // Execute Swap
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -164,12 +212,11 @@
       const pool = new web3.eth.Contract(poolAbi, contractAddress);
 
       try {
-        const gasPrice = await web3.eth.getGasPrice(); // Get current gas price
-        const adjustedGasPrice = web3.utils.toWei((parseFloat(web3.utils.fromWei(gasPrice, 'gwei')) * 0.9).toString(), 'gwei'); // Reduce by 10%
+        const gasPrice = await web3.eth.getGasPrice();
 
         await pool.methods.swap(amountInWei).send({
           from: userAddress,
-          gasPrice: adjustedGasPrice // Set adjusted lower gas price
+          gasPrice: gasPrice // Default gas price
         });
 
         alert('Swap successful!');
@@ -223,4 +270,4 @@
     }
   </script>
 </body>
-  </html>
+</html>
