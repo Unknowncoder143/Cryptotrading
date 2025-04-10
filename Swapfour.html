@@ -6,54 +6,59 @@
   <title>WBTC-USDT Swap Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
   <style>
-    /* Add your styles here */
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f4f7fa;
+      margin: 0;
       padding: 20px;
+      background-color: #f4f4f4;
     }
+
     .container {
       max-width: 600px;
       margin: 0 auto;
-      background-color: #ffffff;
+      background-color: #fff;
       padding: 20px;
-      border-radius: 8px;
+      border-radius: 10px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
+
     h2 {
       text-align: center;
-      font-size: 24px;
       margin-bottom: 20px;
     }
+
     label {
       display: block;
       margin-top: 10px;
     }
+
     input, select, button {
       width: 100%;
       padding: 10px;
       margin-top: 5px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 16px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
     }
+
     button {
-      cursor: pointer;
-      background-color: #4CAF50;
+      background-color: #007bff;
       color: white;
-      font-weight: bold;
-      margin-top: 20px;
+      cursor: pointer;
     }
+
     button:hover {
-      background-color: #45a049;
+      background-color: #0056b3;
     }
-    .result, .transaction-preview {
+
+    #result {
       margin-top: 20px;
       padding: 10px;
       background-color: #f9f9f9;
+      border: 1px solid #ddd;
       border-radius: 5px;
-      border: 1px solid #e0e0e0;
     }
   </style>
 </head>
@@ -95,19 +100,10 @@
 
     <button onclick="fetchReserves()">Load Reserves</button>
     <button onclick="calculate()">Calculate Swap</button>
-    <button onclick="confirmSwap()">Execute Swap</button>
+    <button onclick="executeSwap()">Execute Swap</button>
 
-    <div class="result">
-      <h3>Swap Result</h3>
-      <div id="result">Please load reserves to begin.</div>
-    </div>
-
-    <div class="transaction-preview">
-      <h3>Transaction Preview</h3>
-      <div id="transactionPreview">
-        <!-- Preview of the swap will appear here -->
-      </div>
-    </div>
+    <h3>Swap Result</h3>
+    <div id="result">Please load reserves to begin.</div>
   </div>
 
   <script>
@@ -119,6 +115,7 @@
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
+          // Request account access
           const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
           userAddress = accounts[0];
           document.querySelector('button').innerText = `Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
@@ -186,53 +183,6 @@
       }
     }
 
-    // Preview of the transaction
-    function previewTransaction() {
-      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
-      const usdt = parseFloat(document.getElementById("usdtReserve").value);
-      const amt = parseFloat(document.getElementById("amount").value);
-      const dir = document.getElementById("direction").value;
-      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
-      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
-
-      const feeAmount = amt * feeRate;
-      const amtInWithFee = amt - feeAmount;
-
-      let output = "";
-
-      if (dir === "usdtToWbtc") {
-        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
-        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
-        const minReceived = wbtcOut * (1 - slippageRate);
-
-        output += `Fee deducted: <b>${feeAmount.toFixed(2)} USDT</b><br>`;
-        output += `You will receive: <b>${wbtcOut.toFixed(8)} WBTC</b><br>`;
-        output += `Minimum received after slippage: <b>${minReceived.toFixed(8)} WBTC</b><br>`;
-        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
-        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
-      } else {
-        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
-        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
-        const minReceived = usdtOut * (1 - slippageRate);
-
-        output += `Fee deducted: <b>${feeAmount.toFixed(8)} WBTC</b><br>`;
-        output += `You will receive: <b>${usdtOut.toFixed(2)} USDT</b><br>`;
-        output += `Minimum received after slippage: <b>${minReceived.toFixed(2)} USDT</b><br>`;
-        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
-        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
-      }
-
-      document.getElementById("transactionPreview").innerHTML = output;
-    }
-
-    function calculate() {
-      previewTransaction(); // Show preview of transaction
-    }
-
     async function executeSwap() {
       const network = document.getElementById("network").value;
       const poolAddress = document.getElementById("poolAddress").value;
@@ -245,8 +195,6 @@
       }
 
       const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
-      const contractAddress = poolAddress;
-
       const poolAbi = [
         {
           "constant": false,
@@ -261,39 +209,105 @@
         }
       ];
 
-      const pool = new web3.eth.Contract(poolAbi, contractAddress);
-
-      try {
-        await pool.methods.swap(amountInWei).send({ from: userAddress });
-        alert('Swap successful!');
-      } catch (err) {
-        console.error('Error during swap} catch (err) {
-        console.error('Error during swap:', err);
-        alert('Swap failed. Please check the console for more details.');
-      }
-    }
-
-    // Execute swap button handler
-    function confirmSwap() {
-      const network = document.getElementById("network").value;
-      const direction = document.getElementById("direction").value;
-      const amount = parseFloat(document.getElementById("amount").value);
-
-      if (amount <= 0) {
-        alert("Please enter a valid amount.");
-        return;
-      }
-
+      const pool = new web3.eth.Contract(poolAbi, poolAddress);
+      
+      // Fetch reserves for calculation (use the fetchReserves function if needed)
+      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
+      const usdt = parseFloat(document.getElementById("usdtReserve").value);
       const feeRate = parseFloat(document.getElementById("fee").value) / 100;
       const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
 
+      const feeAmount = amount * feeRate;
+      const amtInWithFee = amount - feeAmount;
+      
+      let output = '';
+      let transactionPreview = '';
+
+      // Calculation based on swap direction
       if (direction === "usdtToWbtc") {
-        executeSwap(); // Execute the swap for USDT to WBTC
-      } else if (direction === "wbtcToUsdt") {
-        executeSwap(); // Execute the swap for WBTC to USDT
+        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
+        const minReceived = wbtcOut * (1 - slippageRate);
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>Amount to Swap:</b> ${amount} USDT<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(2)} USDT<br>
+          <b>WBTC Output (before slippage):</b> ${wbtcOut.toFixed(8)} WBTC<br>
+          <b>Min WBTC Received (after slippage):</b> ${minReceived.toFixed(8)} WBTC<br>
+          <b>Price Impact:</b> ${((wbtcOut / usdt) * 100).toFixed(2)}%<br>
+          <b>New Price (1 WBTC ≈):</b> ${(usdt / wbtc).toFixed(2)} USDT
+        `;
       } else {
-        alert("Please select a valid swap direction.");
+        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
+        const minReceived = usdtOut * (1 - slippageRate);
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>Amount to Swap:</b> ${amount} WBTC<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(8)} WBTC<br>
+          <b>USDT Output (before slippage):</b> ${usdtOut.toFixed(2)} USDT<br>
+          <b>Min USDT Received (after slippage):</b> ${minReceived.toFixed(2)} USDT<br>
+          <b>Price Impact:</b> ${((usdtOut / wbtc) * 100).toFixed(2)}%<br>
+          <b>New Price (1 WBTC ≈):</b> ${(usdt / wbtc).toFixed(2)} USDT
+        `;
       }
+
+      // Show the transaction preview
+      document.getElementById("result").innerHTML = transactionPreview;
+
+      // Ask for confirmation before executing
+if (confirm("Do you want to proceed with this transaction?")) {
+        // Proceed with transaction execution
+        try {
+          await pool.methods.swap(amountInWei).send({ from: userAddress });
+          alert("Transaction successful!");
+        } catch (err) {
+          console.error("Transaction failed:", err);
+          alert("Transaction failed. Please try again.");
+        }
+      }
+    }
+
+    function calculate() {
+      const amount = document.getElementById("amount").value;
+      const wbtcReserve = parseFloat(document.getElementById("wbtcReserve").value);
+      const usdtReserve = parseFloat(document.getElementById("usdtReserve").value);
+      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
+
+      const feeAmount = amount * feeRate;
+      const amtInWithFee = amount - feeAmount;
+
+      let output = '';
+      let transactionPreview = '';
+
+      // Swap Calculation based on direction
+      const direction = document.getElementById("direction").value;
+      if (direction === "usdtToWbtc") {
+        const wbtcOut = (amtInWithFee * wbtcReserve) / (usdtReserve + amtInWithFee);
+        const minReceived = wbtcOut * (1 - slippageRate);
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>Amount to Swap:</b> ${amount} USDT<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(2)} USDT<br>
+          <b>WBTC Output (before slippage):</b> ${wbtcOut.toFixed(8)} WBTC<br>
+          <b>Min WBTC Received (after slippage):</b> ${minReceived.toFixed(8)} WBTC<br>
+          <b>Price Impact:</b> ${((wbtcOut / usdtReserve) * 100).toFixed(2)}%<br>
+          <b>New Price (1 WBTC ≈):</b> ${(usdtReserve / wbtcReserve).toFixed(2)} USDT
+        `;
+      } else {
+        const usdtOut = (amtInWithFee * usdtReserve) / (wbtcReserve + amtInWithFee);
+        const minReceived = usdtOut * (1 - slippageRate);
+        transactionPreview = `
+          <b>Transaction Preview:</b><br>
+          <b>Amount to Swap:</b> ${amount} WBTC<br>
+          <b>Fee Deducted:</b> ${feeAmount.toFixed(8)} WBTC<br>
+          <b>USDT Output (before slippage):</b> ${usdtOut.toFixed(2)} USDT<br>
+          <b>Min USDT Received (after slippage):</b> ${minReceived.toFixed(2)} USDT<br>
+          <b>Price Impact:</b> ${((usdtOut / wbtcReserve) * 100).toFixed(2)}%<br>
+          <b>New Price (1 WBTC ≈):</b> ${(usdtReserve / wbtcReserve).toFixed(2)} USDT
+        `;
+      }
+
+      document.getElementById("result").innerHTML = transactionPreview;
     }
   </script>
 </body>
