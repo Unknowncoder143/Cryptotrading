@@ -1,100 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WBTC-USDT Swap Calculator</title>
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
+  <meta charset="UTF-8">
+  <title>WBTC/USDT Pool Swapper</title>
+  <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.0.0-beta.55/dist/web3.min.js"></script>
   <style>
     body {
-      font-family: 'Inter', sans-serif;
-      background: #f5f5f5;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #111;
+      color: #eee;
       padding: 20px;
     }
-    .container {
-      max-width: 500px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    label, input, select, button {
-      display: block;
-      width: 100%;
-      margin-bottom: 12px;
+    input, select, button {
+      margin: 10px 0;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
     }
     input, select {
-      padding: 8px;
+      width: 100%;
     }
     button {
-      background: #007bff;
+      background: #f39c12;
       color: white;
-      border: none;
-      padding: 10px;
-      border-radius: 6px;
       cursor: pointer;
     }
-    h3 {
-      margin-top: 24px;
-      color: #333;
+    button:hover {
+      background: #e67e22;
     }
-    .preview {
-      background: #f0f0f0;
-      padding: 12px;
-      border-radius: 8px;
-      margin-top: 12px;
+    #details {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      background: #222;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>WBTC-USDT Pool Calculator</h2>
-    <button onclick="connectWallet()">Connect Wallet</button>
+  <h2>WBTC ↔ USDT Pool Swapper</h2>
 
-    <label for="network">Network</label>
-    <select id="network">
-      <option value="polygon">Polygon</option>
-      <option value="ethereum">Ethereum</option>
-      <option value="bsc">Binance Smart Chain</option>
-    </select>
+  <button onclick="connectWallet()">Connect Wallet</button><br>
 
-    <label for="poolAddress">Pool Contract Address</label>
-    <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
+  <label>Pool Address</label>
+  <input type="text" id="poolAddress" placeholder="Enter pool contract address">
 
-    <label for="direction">Swap Direction</label>
-    <select id="direction">
-      <option value="usdtToWbtc">USDT to WBTC</option>
-      <option value="wbtcToUsdt">WBTC to USDT</option>
-    </select>
+  <label>Network</label>
+  <select id="network">
+    <option value="ethereum">Ethereum</option>
+    <option value="polygon">Polygon</option>
+    <option value="bsc">BSC</option>
+  </select>
 
-    <label for="amount">Amount to Swap</label>
-    <input type="number" id="amount" step="any">
+  <label>Amount</label>
+  <input type="number" id="amount" placeholder="Enter amount">
 
-    <label for="fee">Fee (%)</label>
-    <input type="number" id="fee" value="0.3" step="any">
+  <label>Swap Direction</label>
+  <select id="direction">
+    <option value="usdtToWbtc">USDT → WBTC</option>
+    <option value="wbtcToUsdt">WBTC → USDT</option>
+  </select>
 
-    <label for="slippage">Slippage Tolerance (%)</label>
-    <input type="number" id="slippage" value="0.5" step="any">
+  <button onclick="executeSwap()">Swap</button>
 
-    <label for="wbtcReserve">WBTC Reserve</label>
-    <input type="number" id="wbtcReserve" readonly>
-
-    <label for="usdtReserve">USDT Reserve</label>
-    <input type="number" id="usdtReserve" readonly>
-
-    <button onclick="fetchReserves()">Load Reserves</button>
-    <button onclick="calculate()">Preview Transaction</button>
-    <button onclick="executeSwap()">Execute Swap</button>
-
-    <h3>Transaction Preview</h3>
-    <div id="preview" class="preview">Please load reserves and enter amount to see preview.</div>
-
-    <h3>Transaction Details</h3>
-    <div id="details" class="preview">No transaction submitted yet.</div>
-  </div>
+  <div id="details"></div>
 
   <script>
     let web3;
@@ -104,28 +75,34 @@
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
-          const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           userAddress = accounts[0];
-          document.querySelector('button').innerText = `Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+          document.getElementById("details").innerText = "Connected: " + userAddress;
         } catch (error) {
-          console.error('User denied account access');
+          console.error("User rejected connection", error);
         }
       } else {
-        alert('MetaMask not installed.');
+        alert("Please install MetaMask");
       }
     }
 
-    async function fetchReserves() {
-      const network = document.getElementById("network").value;
+    async function executeSwap() {
       const poolAddress = document.getElementById("poolAddress").value;
+      const amount = document.getElementById("amount").value;
+      const network = document.getElementById("network").value;
+      const direction = document.getElementById("direction").value;
+
+      if (!web3 || !userAddress) {
+        alert('Please connect your wallet first.');
+        return;
+      }
 
       const rpcUrls = {
         polygon: "https://polygon-rpc.com",
         ethereum: "https://cloudflare-eth.com",
         bsc: "https://bsc-dataseed.binance.org/"
       };
-
-      const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+      const web3Provider = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
 
       const erc20Abi = [
         { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
@@ -134,97 +111,7 @@
 
       const poolAbi = [
         { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
-        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
-      ];
-
-      try {
-        const pool = new web3.eth.Contract(poolAbi, poolAddress);
-        const token0Addr = await pool.methods.token0().call();
-        const token1Addr = await pool.methods.token1().call();
-
-        const token0 = new web3.eth.Contract(erc20Abi, token0Addr);
-        const token1 = new web3.eth.Contract(erc20Abi, token1Addr);
-
-        const [bal0, dec0] = await Promise.all([
-          token0.methods.balanceOf(poolAddress).call(),
-          token0.methods.decimals().call()
-        ]);
-
-        const [bal1, dec1] = await Promise.all([
-          token1.methods.balanceOf(poolAddress).call(),
-          token1.methods.decimals().call()
-        ]);
-
-        const reserve0 = Number(bal0) / 10 ** dec0;
-        const reserve1 = Number(bal1) / 10 ** dec1;
-
-        const wbtcReserve = dec0 === "8" ? reserve0 : reserve1;
-        const usdtReserve = dec0 === "6" ? reserve0 : reserve1;
-
-        document.getElementById("wbtcReserve").value = wbtcReserve;
-        document.getElementById("usdtReserve").value = usdtReserve;
-
-        document.getElementById("preview").innerText = "Reserves loaded. Ready to preview.";
-      } catch (err) {
-        document.getElementById("preview").innerText = "Error loading reserves.";
-        console.error(err);
-      }
-    }
-
-    function calculate() {
-      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
-      const usdt = parseFloat(document.getElementById("usdtReserve").value);
-      const amt = parseFloat(document.getElementById("amount").value);
-      const dir = document.getElementById("direction").value;
-      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
-      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
-
-      const feeAmount = amt * feeRate;
-      const amtInWithFee = amt - feeAmount;
-
-      let output = "";
-
-      if (dir === "usdtToWbtc") {
-        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
-        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
-        const minReceived = wbtcOut * (1 - slippageRate);
-
-        output += `Fee: ${feeAmount.toFixed(2)} USDT\n`;
-        output += `Estimated WBTC: ${wbtcOut.toFixed(8)}\n`;
-        output += `Min after slippage: ${minReceived.toFixed(8)}\n`;
-        output += `Price impact: ${priceImpact.toFixed(2)}%\n`;
-        output += `New price: 1 WBTC ≈ ${newPrice.toFixed(2)} USDT`;
-      } else {
-        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
-        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
-        const currentPrice = usdt / wbtc;
-        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
-        const minReceived = usdtOut * (1 - slippageRate);
-
-        output += `Fee: ${feeAmount.toFixed(8)} WBTC\n`;
-        output += `Estimated USDT: ${usdtOut.toFixed(2)}\n`;
-        output += `Min after slippage: ${minReceived.toFixed(2)}\n`;
-        output += `Price impact: ${priceImpact.toFixed(2)}%\n`;
-        output += `New price: 1 WBTC ≈ ${newPrice.toFixed(2)} USDT`;
-      }
-
-      document.getElementById("preview").innerText = output;
-    }
-
-    async function executeSwap() {
-      const poolAddress = document.getElementById("poolAddress").value;
-      const amount = document.getElementById("amount").value;
-
-      if (!web3 || !userAddress) {
-        alert('Please connect your wallet first.');
-        return;
-      }
-
-      const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
-
-      const poolAbi = [
+        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
         {
           "constant": false,
           "inputs": [{ "name": "amountIn", "type": "uint256" }],
@@ -236,11 +123,49 @@
         }
       ];
 
-      const pool = new web3.eth.Contract(poolAbi, poolAddress);
+      const pool = new web3Provider.eth.Contract(poolAbi, poolAddress);
+      const token0Addr = await pool.methods.token0().call();
+      const token1Addr = await pool.methods.token1().call();
+
+      const token0 = new web3Provider.eth.Contract(erc20Abi, token0Addr);
+      const token1 = new web3Provider.eth.Contract(erc20Abi, token1Addr);
+
+      const isWBTC0 = (await token0.methods.decimals().call()) === "8";
+      const wbtcToken = isWBTC0 ? token0 : token1;
+      const usdtToken = isWBTC0 ? token1 : token0;
+
+      const [decWbtc, decUsdt] = await Promise.all([
+        wbtcToken.methods.decimals().call(),
+        usdtToken.methods.decimals().call()
+      ]);
+
+      const [wbtcBefore, usdtBefore] = await Promise.all([
+        wbtcToken.methods.balanceOf(userAddress).call(),
+        usdtToken.methods.balanceOf(userAddress).call()
+      ]);
+
+      const amountIn = direction === "usdtToWbtc"
+        ? web3.utils.toBN(amount * (10 ** decUsdt))
+        : web3.utils.toBN(amount * (10 ** decWbtc));
 
       try {
-        const tx = await pool.methods.swap(amountInWei).send({ from: userAddress });
-        document.getElementById("details").innerText = `Swap successful.\nTx Hash: ${tx.transactionHash}`;
+        const tx = await pool.methods.swap(amountIn).send({ from: userAddress });
+
+        const [wbtcAfter, usdtAfter] = await Promise.all([
+          wbtcToken.methods.balanceOf(userAddress).call(),
+          usdtToken.methods.balanceOf(userAddress).call()
+        ]);
+
+        const wbtcChange = (wbtcAfter - wbtcBefore) / (10 ** decWbtc);
+        const usdtChange = (usdtAfter - usdtBefore) / (10 ** decUsdt);
+
+        document.getElementById("details").innerText =
+          `Swap successful!\nTx Hash: ${tx.transactionHash}\n\n` +
+          `WBTC: ${(wbtcBefore / 10 ** decWbtc).toFixed(8)} → ${(wbtcAfter / 10 ** decWbtc).toFixed(8)} ` +
+          `(${wbtcChange >= 0 ? "+" : ""}${wbtcChange.toFixed(8)})\n` +
+          `USDT: ${(usdtBefore / 10 ** decUsdt).toFixed(2)} → ${(usdtAfter / 10 ** decUsdt).toFixed(2)} ` +
+          `(${usdtChange >= 0 ? "+" : ""}${usdtChange.toFixed(2)})`;
+
       } catch (err) {
         console.error('Swap failed:', err);
         document.getElementById("details").innerText = `Swap failed: ${err.message}`;
@@ -248,4 +173,4 @@
     }
   </script>
 </body>
-  </html>
+</html>
