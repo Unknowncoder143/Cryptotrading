@@ -1,85 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Sign Transaction Preview</title>
+  <title>Swap USDT → WBTC</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
   <style>
+    body { font-family: sans-serif; text-align: center; padding-top: 40px; }
+    input { margin: 5px; padding: 8px; width: 220px; }
+    button { padding: 8px 16px; margin: 8px; }
     #popup, #overlay {
       display: none;
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
     }
-    #overlay {
-      background: rgba(0,0,0,0.5);
-      z-index: 999;
-    }
+    #overlay { background: rgba(0,0,0,0.6); z-index: 999; }
     #popup {
-      background: #fff;
-      width: 300px;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.4);
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
+      background: #fff; padding: 20px; width: 320px;
+      border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 1000;
     }
   </style>
 </head>
 <body>
 
-<button onclick="connectWallet()">Connect Wallet</button>
-<button onclick="showPreview()">Preview & Sign</button>
+  <h2>Swap USDT to WBTC</h2>
 
-<div id="overlay"></div>
-<div id="popup">
-  <div id="messageBox"></div><br>
-  <button onclick="signMessage()">Sign & Confirm</button>
-  <button onclick="hidePopup()">Cancel</button>
-</div>
+  <button onclick="connectWallet()">Connect Wallet</button><br><br>
 
-<script>
-  let web3;
-  let userAddress;
+  <input id="amount" type="number" placeholder="USDT Amount" /><br>
+  <input id="pool" type="text" placeholder="Pool Contract Address" /><br>
 
-  async function connectWallet() {
-    if (window.ethereum) {
-      web3 = new Web3(window.ethereum);
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      userAddress = accounts[0];
-      alert("Connected: " + userAddress);
-    } else {
-      alert("Install MetaMask");
+  <button onclick="showPreview()">Confirm</button>
+
+  <div id="overlay"></div>
+  <div id="popup">
+    <div id="messageBox"></div>
+    <button onclick="signAndSwap()">Sign & Swap</button>
+    <button onclick="hidePopup()">Cancel</button>
+  </div>
+
+  <p id="status" style="margin-top: 20px;"></p>
+
+  <script>
+    let web3;
+    let userAddress;
+    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // mainnet USDT
+
+    const erc20Abi = [
+      {
+        "constant": false,
+        "inputs": [
+          { "name": "_spender", "type": "address" },
+          { "name": "_value", "type": "uint256" }
+        ],
+        "name": "approve",
+        "outputs": [{ "name": "success", "type": "bool" }],
+        "type": "function"
+      }
+    ];
+
+    const poolAbi = [
+      {
+        "constant": false,
+        "inputs": [{ "name": "amountIn", "type": "uint256" }],
+        "name": "swapUSDTForWBTC",
+        "outputs": [],
+        "payable": false,
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ];
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        userAddress = accounts[0];
+        document.getElementById("status").innerText = "Connected: " + userAddress;
+      } else {
+        alert("Please install MetaMask.");
+      }
     }
-  }
 
-  function showPreview() {
-    const msg = `Swap 50 USDT to WBTC\nPool: 0xYourPoolAddress`;
-    document.getElementById("messageBox").innerText = msg;
-    document.getElementById("overlay").style.display = "block";
-    document.getElementById("popup").style.display = "block";
-  }
+    function showPreview() {
+      const amount = document.getElementById("amount").value;
+      const pool = document.getElementById("pool").value;
+      if (!amount || !pool) return alert("Please enter amount & pool address.");
 
-  function hidePopup() {
-    document.getElementById("overlay").style.display = "none";
-    document.getElementById("popup").style.display = "none";
-  }
-
-  async function signMessage() {
-    const message = document.getElementById("messageBox").innerText;
-    try {
-      await ethereum.request({
-        method: "personal_sign",
-        params: [message, userAddress]
-      });
-      alert("✅ Signed!");
-      hidePopup();
-    } catch (err) {
-      console.error(err);
-      alert("❌ Sign cancelled.");
+      const msg = `Swap ${amount} USDT to WBTC\nPool: ${pool}`;
+      document.getElementById("messageBox").innerText = msg;
+      document.getElementById("overlay").style.display = "block";
+      document.getElementById("popup").style.display = "block";
     }
-  }
-</script>
+
+    function hidePopup() {
+      document.getElementById("overlay").style.display = "none";
+      document.getElementById("popup").style.display = "none";
+    }
+
+    async function signAndSwap() {
+      const amount = document.getElementById("amount").value;
+      const pool = document.getElementById("pool").value;
+      const amountIn = web3.utils.toBN(amount * 1e6); // USDT = 6 decimals
+
+      const message = `Swap ${amount} USDT to WBTC\nPool: ${pool}`;
+      try {
+        await ethereum.request({
+          method: "personal_sign",
+          params: [message, userAddress]
+        });
+
+        const usdt = new web3.eth.Contract(erc20Abi, USDT);
+        const poolContract = new web3.eth.Contract(poolAbi, pool);
+
+        document.getElementById("status").innerText = "⏳ Approving USDT...";
+        await usdt.methods.approve(pool, amountIn).send({ from: userAddress });
+
+        document.getElementById("status").innerText = "⏳ Swapping USDT for WBTC...";
+        await poolContract.methods.swapUSDTForWBTC(amountIn).send({ from: userAddress });
+
+        document.getElementById("status").innerText = "✅ Swap complete!";
+        hidePopup();
+      } catch (err) {
+        console.error(err);
+        document.getElementById("status").innerText = "❌ Failed or cancelled.";
+      }
+    }
+  </script>
 
 </body>
 </html>
