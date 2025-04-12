@@ -2,77 +2,255 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>USDT ↔ WBTC Swap</title>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WBTC-USDT Swap Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* Same styles as before */
+  </style>
 </head>
 <body>
-  <h2>Connect Wallet & Swap Tokens</h2>
-  <button onclick="connectWallet()">🔌 Connect Wallet</button>
-  <p id="walletStatus">Wallet not connected</p>
+  <div class="container">
+    <h2>WBTC-USDT Pool Calculator</h2>
+    <button onclick="connectWallet()">Connect Wallet</button>
 
-  <label>Token Contract Address:</label><br>
-  <input type="text" id="tokenAddress" placeholder="e.g. 0xdAC17... (USDT)" size="50"><br><br>
+    <label for="network">Network</label>
+    <select id="network">
+      <option value="polygon">Polygon</option>
+      <option value="ethereum">Ethereum</option>
+      <option value="bsc">Binance Smart Chain</option>
+    </select>
 
-  <label>Swap Direction:</label><br>
-  <select id="swapDirection">
-    <option value="usdtToWbtc">USDT → WBTC</option>
-    <option value="wbtcToUsdt">WBTC → USDT</option>
-  </select><br><br>
+    <label for="poolAddress">Pool Contract Address</label>
+    <input type="text" id="poolAddress" value="0x76D9553f9910c5CF1F5dBbb210dc95BC5a63EE68">
 
-  <label>Amount to Swap:</label><br>
-  <input type="text" id="amountIn" placeholder="Enter amount"><br><br>
+    <label for="direction">Swap Direction</label>
+    <select id="direction">
+      <option value="usdtToWbtc">USDT to WBTC</option>
+      <option value="wbtcToUsdt">WBTC to USDT</option>
+    </select>
 
-  <button onclick="approveToken()">✅ Approve</button>
-  <button onclick="swapTokens()">🔁 Swap</button>
+    <label for="amount">Amount to Swap</label>
+    <input type="number" id="amount" step="any">
+
+    <label for="fee">Fee (%)</label>
+    <input type="number" id="fee" value="0.3" step="any">
+
+    <label for="slippage">Slippage Tolerance (%)</label>
+    <input type="number" id="slippage" value="0.5" step="any">
+
+    <label for="wbtcReserve">WBTC Reserve</label>
+    <input type="number" id="wbtcReserve" readonly>
+
+    <label for="usdtReserve">USDT Reserve</label>
+    <input type="number" id="usdtReserve" readonly>
+
+    <button onclick="fetchReserves()">Load Reserves</button>
+    <button onclick="calculate()">Calculate Swap</button>
+    <button onclick="approveToken()">Approve Token</button>
+    <button onclick="executeSwap()">Execute Swap</button>
+
+    <h3>Swap Result</h3>
+    <div id="result">Please load reserves to begin.</div>
+  </div>
 
   <script>
-    let web3Provider, web3Signer;
-    const UNISWAP_ROUTER = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"; // Uniswap V2 Router
-    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
-    const WBTC = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
+    let web3;
+    let userAddress;
 
+    // Connect wallet
     async function connectWallet() {
       if (window.ethereum) {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        web3Signer = web3Provider.getSigner();
-        const address = await web3Signer.getAddress();
-        document.getElementById("walletStatus").innerText = "Connected: " + address;
+        web3 = new Web3(window.ethereum);
+        try {
+          // Request account access
+          const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+          userAddress = accounts[0];
+          document.querySelector('button').innerText = `Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+        } catch (error) {
+          console.error('User denied account access');
+        }
       } else {
-        alert("Please install MetaMask");
+        alert('MetaMask is not installed. Please install it to continue.');
+      }
+    }
+
+    async function fetchReserves() {
+      const network = document.getElementById("network").value;
+      const poolAddress = document.getElementById("poolAddress").value;
+
+      const rpcUrls = {
+        polygon: "https://polygon-rpc.com",
+        ethereum: "https://cloudflare-eth.com",
+        bsc: "https://bsc-dataseed.binance.org/"
+      };
+
+      // Ensure we use the global web3 instance, no need to re-declare it here
+      const web3Instance = new Web3(new Web3.providers.HttpProvider(rpcUrls[network]));
+
+      const erc20Abi = [
+        { "constant": true, "name": "balanceOf", "inputs": [{ "name": "_owner", "type": "address" }], "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
+        { "constant": true, "name": "decimals", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
+      ];
+
+      const poolAbi = [
+        { "inputs": [], "name": "token0", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
+        { "inputs": [], "name": "token1", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
+      ];
+
+      try {
+        const pool = new web3Instance.eth.Contract(poolAbi, poolAddress);
+        const token0Addr = await pool.methods.token0().call();
+        const token1Addr = await pool.methods.token1().call();
+
+        const token0 = new web3Instance.eth.Contract(erc20Abi, token0Addr);
+        const token1 = new web3Instance.eth.Contract(erc20Abi, token1Addr);
+
+        const [bal0, dec0] = await Promise.all([
+          token0.methods.balanceOf(poolAddress).call(),
+          token0.methods.decimals().call()
+        ]);
+
+        const [bal1, dec1] = await Promise.all([
+          token1.methods.balanceOf(poolAddress).call(),
+          token1.methods.decimals().call()
+        ]);
+
+        const reserve0 = Number(bal0) / 10 ** dec0;
+        const reserve1 = Number(bal1) / 10 ** dec1;
+
+        const wbtcReserve = dec0 === "8" ? reserve0 : reserve1;
+        const usdtReserve = dec0 === "6" ? reserve0 : reserve1;
+
+        document.getElementById("wbtcReserve").value = wbtcReserve;
+        document.getElementById("usdtReserve").value = usdtReserve;
+
+        document.getElementById("result").innerText = "Reserves loaded. Ready to calculate!";
+      } catch (err) {
+        document.getElementById("result").innerText = "Error loading reserves. Check the contract address.";
+        console.error(err);
       }
     }
 
     async function approveToken() {
-      const tokenAddr = document.getElementById("tokenAddress").value;
-      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 18);
-      const tokenAbi = ["function approve(address spender, uint amount) public returns (bool)"];
-      const tokenContract = new ethers.Contract(tokenAddr, tokenAbi, web3Signer);
-      const tx = await tokenContract.approve(UNISWAP_ROUTER, amount);
-      await tx.wait();
-      alert("Approval successful!");
+      const network = document.getElementById("network").value;
+      const poolAddress = document.getElementById("poolAddress").value;
+      const amount = document.getElementById("amount").value;
+
+      if (!web3 || !userAddress) {
+        alert('Please connect your wallet first.');
+        return;
+      }
+
+      const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
+      const erc20Abi = [
+        {
+          "constant": false,
+          "inputs": [
+            { "name": "spender", "type": "address" },
+            { "name": "amount", "type": "uint256" }
+          ],
+          "name": "approve",
+          "outputs": [{ "name": "success", "type": "bool" }],
+          "payable": false,
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+
+      const usdtAddress = "USDT_TOKEN_ADDRESS";  // Replace with actual USDT contract address
+      const token = new web3.eth.Contract(erc20Abi, usdtAddress);
+
+      try {
+        await token.methods.approve(poolAddress, amountInWei).send({ from: userAddress });
+        alert('Token approval successful!');
+      } catch (err) {
+        console.error('Error during approval:', err);
+        alert('Approval failed. Please try again.');
+      }
     }
 
-    async function swapTokens() {
-      const direction = document.getElementById("swapDirection").value;
-      const amountIn = ethers.utils.parseUnits(document.getElementById("amountIn").value, 18);
-      const path = direction === "usdtToWbtc" ? [USDT, WBTC] : [WBTC, USDT];
+    async function executeSwap() {
+      const network = document.getElementById("network").value;
+      const poolAddress = document.getElementById("poolAddress").value;
+      const amount = document.getElementById("amount").value;
+      const direction = document.getElementById("direction").value;
 
-      const routerAbi = [
-        "function swapExactTokensForTokens(uint amountIn,uint amountOutMin,address[] calldata path,address to,uint deadline) external returns (uint[] memory amounts)"
+      if (!web3 || !userAddress) {
+        alert('Please connect your wallet first.');
+        return;
+      }
+
+      const amountInWei = web3.utils.toWei(amount.toString(), 'ether');
+      const contractAddress = poolAddress;
+
+      const poolAbi = [
+        {
+          "constant": false,
+          "inputs": [
+            { "name": "amountIn", "type": "uint256" }
+          ],
+          "name": "swap",
+          "outputs": [{ "name": "success", "type": "bool" }],
+          "payable": true,
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
       ];
-      const router = new ethers.Contract(UNISWAP_ROUTER, routerAbi, web3Signer);
-      const userAddress = await web3Signer.getAddress();
 
-      const tx = await router.swapExactTokensForTokens(
-        amountIn,
-        0, // amountOutMin set to 0 for simplicity (not safe in real use!)
-        path,
-        userAddress,
-        Math.floor(Date.now() / 1000) + 60 * 5
-      );
-      await tx.wait();
-      alert("Swap complete!");
+      const pool = new web3.eth.Contract(poolAbi, contractAddress);
+
+      try {
+        await pool.methods.swap(amountInWei).send({ from: userAddress });
+        alert('Swap successful!');
+      } catch (err) {
+        console.error('Error during swap:', err);
+        alert('Swap failed. Please try again.');
+      }
+    }
+
+    function calculate() {
+      const wbtc = parseFloat(document.getElementById("wbtcReserve").value);
+      const usdt = parseFloat(document.getElementById("usdtReserve").value);
+      const amt = parseFloat(document.getElementById("amount").value);
+      const dir = document.getElementById("direction").value;
+      const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+      const slippageRate = parseFloat(document.getElementById("slippage").value) / 100;
+
+      const feeAmount = amt * feeRate;
+      const amtInWithFee = amt - feeAmount;
+
+      let output = "";
+
+      if (dir === "usdtToWbtc") {
+        const wbtcOut = (amtInWithFee * wbtc) / (usdt + amtInWithFee);
+        const newPrice = (usdt + amtInWithFee) / (wbtc - wbtcOut);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((newPrice - currentPrice) / currentPrice) * 100;
+        const minReceived = wbtcOut * (1 - slippageRate);
+
+        output += `Fee deducted: <b>${feeAmount.toFixed(2)} USDT</b><br>`;
+        output += `You receive: <b>${wbtcOut.toFixed(8)} WBTC</b><br>`;
+        output += `Min received after slippage: <b>${minReceived.toFixed(8)} WBTC</b><br>`;
+        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
+        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
+      } else {
+        const usdtOut = (amtInWithFee * usdt) / (wbtc + amtInWithFee);
+        const newPrice = (usdt - usdtOut) / (wbtc + amtInWithFee);
+        const currentPrice = usdt / wbtc;
+        const priceImpact = ((currentPrice - newPrice) / currentPrice) * 100;
+        const minReceived = usdtOut * (1 - slippageRate);
+
+        output += `Fee deducted: <b>${feeAmount.toFixed(8)} WBTC</b><br>`;
+        output += `You receive: <b>${usdtOut.toFixed(2)} USDT</b><br>`;
+        output += `Min received after slippage: <b>${minReceived.toFixed(2)} USDT</b><br>`;
+        output += `Price impact: <b>${priceImpact.toFixed(2)}%</b><br>`;
+        output += `New price: 1 WBTC ≈ <b>${newPrice.toFixed(2)} USDT</b>`;
+      }
+
+      document.getElementById("result").innerHTML = output;
     }
   </script>
 </body>
