@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>USDT to WBTC Swap</title>
+  <meta charset="UTF-8" />
+  <title>USDT to WBTC Secure Swap</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
 </head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;">
+<body style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px;">
   <h2>Swap USDT to WBTC</h2>
 
   <label>USDT Amount:</label><br>
@@ -16,7 +16,7 @@
 
   <button onclick="connectWallet()">Connect Wallet</button>
   <button onclick="previewTransaction()">Preview Transaction</button>
-  <button onclick="executeSwap()" id="swapButton" style="display:none;">Confirm & Swap</button>
+  <button onclick="signTransaction()" id="signButton" style="display:none;">Sign & Confirm</button>
 
   <div id="previewBox" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; display: none;"></div>
   <p id="result" style="margin-top: 20px;"></p>
@@ -25,43 +25,14 @@
     let web3;
     let userAddress;
 
-    const erc20Abi = [
-      {
-        "constant": false,
-        "inputs": [
-          { "name": "_spender", "type": "address" },
-          { "name": "_value", "type": "uint256" }
-        ],
-        "name": "approve",
-        "outputs": [{ "name": "success", "type": "bool" }],
-        "type": "function"
-      }
-    ];
-
-    const swapAbi = [
-      {
-        "constant": false,
-        "inputs": [{ "name": "amountIn", "type": "uint256" }],
-        "name": "swapUSDTForWBTC",
-        "outputs": [],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }
-    ];
-
     async function connectWallet() {
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
-        try {
-          const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-          userAddress = accounts[0];
-          document.getElementById("result").innerText = `Wallet connected: ${userAddress}`;
-        } catch (err) {
-          document.getElementById("result").innerText = "Connection failed.";
-        }
+        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+        userAddress = accounts[0];
+        document.getElementById("result").innerText = `Wallet connected: ${userAddress}`;
       } else {
-        alert("Install MetaMask first!");
+        alert("Install MetaMask!");
       }
     }
 
@@ -74,66 +45,69 @@
         return;
       }
 
-      const estimatedWBTC = (amount * 0.000015).toFixed(8);
-
       const preview = `
-        <h3 style="margin: 0;">🧾 Transaction Preview</h3>
-        <p>
-          <strong>From Wallet:</strong> ${userAddress || 'Not connected'}<br>
-          <strong>Token:</strong> USDT<br>
-          <strong>Amount:</strong> ${amount} USDT<br>
-          <strong>Estimated WBTC:</strong> ${estimatedWBTC} WBTC<br>
-          <strong>To Contract:</strong> ${poolAddress}<br><br>
-          <em>Steps:</em><br>
-          1️⃣ Approve USDT<br>
-          2️⃣ Execute swap<br><br>
-          <strong style="color: green;">Ready? Click "Confirm & Swap"</strong>
-        </p>
+        <strong>Transaction Preview:</strong><br>
+        Swap <strong>${amount}</strong> USDT<br>
+        To Pool: <strong>${poolAddress}</strong><br><br>
+        You will now sign this data before confirming.
       `;
-
-      document.getElementById("previewBox").style.display = "block";
       document.getElementById("previewBox").innerHTML = preview;
-      document.getElementById("swapButton").style.display = "inline-block";
+      document.getElementById("previewBox").style.display = "block";
+      document.getElementById("signButton").style.display = "inline-block";
     }
 
-    async function executeSwap() {
+    async function signTransaction() {
       const amount = document.getElementById("amount").value;
       const poolAddress = document.getElementById("poolAddress").value;
-      const usdtTokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // USDT mainnet
+      const amountInUSDT = parseFloat(amount).toFixed(2);
 
-      if (!web3 || !userAddress) {
-        alert("Connect wallet first.");
-        return;
-      }
-
-      const amountInWei = web3.utils.toBN(amount * 1e6); // USDT has 6 decimals
-      const estimatedWBTC = (amount * 0.000015).toFixed(8);
-
-      // Preview message for logging or sending
-      const previewMessage = `
-        Transaction Preview:
-        From: ${userAddress}
-        Token: USDT
-        Amount: ${amount} USDT
-        Estimated WBTC: ${estimatedWBTC} WBTC
-        To: ${poolAddress}
-      `;
-      console.log(previewMessage);
-
-      const usdt = new web3.eth.Contract(erc20Abi, usdtTokenAddress);
-      const pool = new web3.eth.Contract(swapAbi, poolAddress);
+      const msgParams = JSON.stringify({
+        domain: {
+          chainId: 1,
+          name: 'USDT to WBTC Swap',
+          verifyingContract: poolAddress,
+          version: '1',
+        },
+        message: {
+          sender: userAddress,
+          token: 'USDT',
+          amount: amountInUSDT,
+          action: 'Swap to WBTC',
+        },
+        primaryType: 'Swap',
+        types: {
+          EIP712Domain: [
+            { name: 'name', type: 'string' },
+            { name: 'version', type: 'string' },
+            { name: 'chainId', type: 'uint256' },
+            { name: 'verifyingContract', type: 'address' },
+          ],
+          Swap: [
+            { name: 'sender', type: 'address' },
+            { name: 'token', type: 'string' },
+            { name: 'amount', type: 'string' },
+            { name: 'action', type: 'string' },
+          ],
+        },
+      });
 
       try {
-        document.getElementById("result").innerText = "⏳ Approving USDT...";
-        await usdt.methods.approve(poolAddress, amountInWei).send({ from: userAddress });
+        const from = userAddress;
+        const params = [from, msgParams];
+        const method = 'eth_signTypedData_v4';
 
-        document.getElementById("result").innerText = "⏳ Swapping USDT for WBTC...";
-        await pool.methods.swapUSDTForWBTC(amountInWei).send({ from: userAddress });
+        const signature = await ethereum.request({
+          method,
+          params,
+        });
 
-        document.getElementById("result").innerHTML = `✅ Swap successful!<br>USDT swapped for WBTC.`;
-      } catch (error) {
-        console.error(error);
-        document.getElementById("result").innerText = "❌ Swap failed. Check console.";
+        document.getElementById("result").innerText =
+          `✅ Signed successfully!\nSignature: ${signature.substring(0, 20)}...`;
+
+        // You can now use this signature to call the actual swap if needed
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").innerText = "❌ Signing rejected or failed.";
       }
     }
   </script>
