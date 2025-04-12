@@ -87,13 +87,13 @@
       const pool = document.getElementById("pool").value;
       if (!amount || !pool) return alert("Please enter amount & pool address.");
 
-      // Prepare preview message with 'Give' USDT and 'Receive' WBTC
+      // Prepare preview message to be signed (for wallet interaction)
       const msg = `
-        <strong>Transaction Preview:</strong><br>
+        Swap Preview: <br>
         <strong>Give:</strong> ${amount} USDT<br>
         <strong>Receive:</strong> WBTC<br><br>
         <strong>Pool Contract Address:</strong> ${pool}<br><br>
-        Click "Sign & Swap" to confirm and execute the transaction.
+        Confirm the transaction by signing it in your wallet.
       `;
       
       // Show preview popup with the message
@@ -114,7 +114,7 @@
 
       const message = `Swap ${amount} USDT to WBTC\nPool: ${pool}`;
       try {
-        // Sign the transaction message
+        // Sign the transaction message via wallet (MetaMask)
         await ethereum.request({
           method: "personal_sign",
           params: [message, userAddress]
