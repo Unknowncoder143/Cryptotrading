@@ -87,8 +87,16 @@
       const pool = document.getElementById("pool").value;
       if (!amount || !pool) return alert("Please enter amount & pool address.");
 
+      // Prepare preview message
       const msg = `Swap ${amount} USDT to WBTC\nPool: ${pool}`;
-      document.getElementById("messageBox").innerText = msg;
+      document.getElementById("messageBox").innerText = `
+        <strong>Transaction Preview:</strong><br>
+        USDT Amount: ${amount}<br>
+        Pool Address: ${pool}<br><br>
+        Click "Sign & Swap" to confirm.
+      `;
+      
+      // Show popup
       document.getElementById("overlay").style.display = "block";
       document.getElementById("popup").style.display = "block";
     }
@@ -105,6 +113,7 @@
 
       const message = `Swap ${amount} USDT to WBTC\nPool: ${pool}`;
       try {
+        // Sign the transaction message
         await ethereum.request({
           method: "personal_sign",
           params: [message, userAddress]
@@ -114,9 +123,11 @@
         const poolContract = new web3.eth.Contract(poolAbi, pool);
 
         document.getElementById("status").innerText = "⏳ Approving USDT...";
+        // Approve USDT spending by the pool
         await usdt.methods.approve(pool, amountIn).send({ from: userAddress });
 
         document.getElementById("status").innerText = "⏳ Swapping USDT for WBTC...";
+        // Execute the swap
         await poolContract.methods.swapUSDTForWBTC(amountIn).send({ from: userAddress });
 
         document.getElementById("status").innerText = "✅ Swap complete!";
