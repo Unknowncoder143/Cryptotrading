@@ -1,79 +1,79 @@
 <!DOCTYPE html>
-<html>
-<head><title>Swap Widget</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>USDT ↔ WBTC Swap</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</head>
 <body>
-  <button id="connectBtn">Connect Wallet</button><br/>
-  <input id="tokenAddr" placeholder="Token Address (WBTC/USDT)"/><br/>
-  <textarea id="abiJson" placeholder="Paste ERC20 ABI JSON"></textarea><br/>
-  <input id="amountIn" placeholder="Amount"/><br/>
-  <div id="preview">Preview: --</div>
-  <button id="approveBtn" disabled>Approve</button>
-  <button id="swapBtn" disabled>Swap</button>
+  <h2>Connect Wallet & Swap Tokens</h2>
+  <button onclick="connectWallet()">🔌 Connect Wallet</button>
+  <p id="walletStatus">Wallet not connected</p>
 
-  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
+  <label>Token Contract Address:</label><br>
+  <input type="text" id="tokenAddress" placeholder="e.g. 0xdAC17... (USDT)" size="50"><br><br>
+
+  <label>Swap Direction:</label><br>
+  <select id="swapDirection">
+    <option value="usdtToWbtc">USDT → WBTC</option>
+    <option value="wbtcToUsdt">WBTC → USDT</option>
+  </select><br><br>
+
+  <label>Amount to Swap:</label><br>
+  <input type="text" id="amountIn" placeholder="Enter amount"><br><br>
+
+  <button onclick="approveToken()">✅ Approve</button>
+  <button onclick="swapTokens()">🔁 Swap</button>
+
   <script>
-    const routerAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // UniswapV2Router02 0
-    const WBTC = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599";             // WBTC 1
-    const USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7";            // USDT 2
-    const routerAbi = [
-      "function getAmountsOut(uint256,address[]) view returns (uint256[])",
-      "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)"
-    ];
-    let provider, signer, router, erc20Abi, tokenIn, tokenOut;
+    let web3Provider, web3Signer;
+    const UNISWAP_ROUTER = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"; // Uniswap V2 Router
+    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+    const WBTC = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
 
-    document.getElementById("connectBtn").onclick = async () => {
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      router = new ethers.Contract(routerAddress, routerAbi, signer);
-      document.getElementById("approveBtn").disabled = false;
-      document.getElementById("swapBtn").disabled = false;
-      alert("Wallet connected!");
-    };
-
-    document.getElementById("abiJson").addEventListener("input", () => {
-      try { erc20Abi = JSON.parse(document.getElementById("abiJson").value); }
-      catch { erc20Abi = null; }
-    });
-
-    document.getElementById("tokenAddr").addEventListener("change", () => {
-      const addr = document.getElementById("tokenAddr").value.trim().toLowerCase();
-      if(addr===WBTC.toLowerCase()){ tokenIn=WBTC; tokenOut=USDT; }
-      else if(addr===USDT.toLowerCase()){ tokenIn=USDT; tokenOut=WBTC; }
-      else{ tokenIn=tokenOut=null; document.getElementById("preview").innerText="Use WBTC or USDT"; }
-    });
-
-    async function updatePreview(){
-      if(!erc20Abi||!tokenIn) return;
-      const inC = new ethers.Contract(tokenIn, erc20Abi, signer);
-      const decIn = await inC.decimals();
-      const decOut = await new ethers.Contract(tokenOut, erc20Abi, signer).decimals();
-      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
-      const amounts = await router.getAmountsOut(amtIn, [tokenIn, tokenOut]);
-      document.getElementById("preview").innerText = `Preview: ${ethers.utils.formatUnits(amounts[1], decOut)}`;
+    async function connectWallet() {
+      if (window.ethereum) {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        web3Signer = web3Provider.getSigner();
+        const address = await web3Signer.getAddress();
+        document.getElementById("walletStatus").innerText = "Connected: " + address;
+      } else {
+        alert("Please install MetaMask");
+      }
     }
-    document.getElementById("amountIn").addEventListener("input", updatePreview);
 
-    document.getElementById("approveBtn").onclick = async () => {
-      const c = new ethers.Contract(tokenIn, erc20Abi, signer);
-      const decIn = await c.decimals();
-      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
-      await c.approve(routerAddress, amtIn);
-      alert("Approved!");
-    };
+    async function approveToken() {
+      const tokenAddr = document.getElementById("tokenAddress").value;
+      const amount = ethers.utils.parseUnits(document.getElementById("amountIn").value, 18);
+      const tokenAbi = ["function approve(address spender, uint amount) public returns (bool)"];
+      const tokenContract = new ethers.Contract(tokenAddr, tokenAbi, web3Signer);
+      const tx = await tokenContract.approve(UNISWAP_ROUTER, amount);
+      await tx.wait();
+      alert("Approval successful!");
+    }
 
-    document.getElementById("swapBtn").onclick = async () => {
-      const c = new ethers.Contract(tokenIn, erc20Abi, signer);
-      const decIn = await c.decimals();
-      const decOut = await new ethers.Contract(tokenOut, erc20Abi, signer).decimals();
-      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
-      const amounts = await router.getAmountsOut(amtIn, [tokenIn, tokenOut]);
-      const minOut = amounts[1].mul(95).div(100);
-      const deadline = Math.floor(Date.now()/1000)+600;
-      await router.swapExactTokensForTokens(amtIn, minOut, [tokenIn, tokenOut], await signer.getAddress(), deadline);
-      alert("Swapped!");
-    };
+    async function swapTokens() {
+      const direction = document.getElementById("swapDirection").value;
+      const amountIn = ethers.utils.parseUnits(document.getElementById("amountIn").value, 18);
+      const path = direction === "usdtToWbtc" ? [USDT, WBTC] : [WBTC, USDT];
+
+      const routerAbi = [
+        "function swapExactTokensForTokens(uint amountIn,uint amountOutMin,address[] calldata path,address to,uint deadline) external returns (uint[] memory amounts)"
+      ];
+      const router = new ethers.Contract(UNISWAP_ROUTER, routerAbi, web3Signer);
+      const userAddress = await web3Signer.getAddress();
+
+      const tx = await router.swapExactTokensForTokens(
+        amountIn,
+        0, // amountOutMin set to 0 for simplicity (not safe in real use!)
+        path,
+        userAddress,
+        Math.floor(Date.now() / 1000) + 60 * 5
+      );
+      await tx.wait();
+      alert("Swap complete!");
+    }
   </script>
 </body>
 </html>
-```3
