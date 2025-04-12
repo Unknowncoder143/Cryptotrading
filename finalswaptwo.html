@@ -87,10 +87,11 @@
       const pool = document.getElementById("pool").value;
       if (!amount || !pool) return alert("Please enter amount & pool address.");
 
-      // Prepare preview message
+      // Prepare preview message with 'Give' USDT and 'Receive' WBTC
       const msg = `
         <strong>Transaction Preview:</strong><br>
-        <strong>Amount to Swap:</strong> ${amount} USDT<br>
+        <strong>Give:</strong> ${amount} USDT<br>
+        <strong>Receive:</strong> WBTC<br><br>
         <strong>Pool Contract Address:</strong> ${pool}<br><br>
         Click "Sign & Swap" to confirm and execute the transaction.
       `;
