@@ -1,121 +1,63 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>USDT to WBTC Swap</title>
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
-    #previewBox, #confirmPopup { border: 1px solid #ccc; padding: 10px; margin-top: 20px; display: none; background: #f9f9f9; }
-    .button { margin: 5px; padding: 10px; cursor: pointer; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web3 MetaMask Popup</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.0/ethers.min.js"></script>
 </head>
 <body>
-  <h2>Swap USDT to WBTC</h2><label>USDT Amount:</label><br> <input type="number" id="amount" placeholder="Enter USDT amount" /><br><br>
+  <h1>Welcome to Web3 DApp</h1>
 
-<button class="button" onclick="connectWallet()">Connect Wallet</button> <button class="button" onclick="previewTransaction()">Preview Transaction</button>
+  <button id="connectBtn">Connect Wallet</button>
+  <button id="sendTransactionBtn" style="display:none;">Send Transaction</button>
 
-  <div id="previewBox"></div>  <div id="confirmPopup">
-    <strong>Confirm Swap:</strong><br>
-    <p id="confirmMessage"></p>
-    <button class="button" onclick="executeSwap()">Confirm & Swap</button>
-  </div>  <p id="result"></p>  <script>
-    let web3;
-    let userAddress;
-
-    const usdtAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Mainnet
-    const routerAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // Uniswap V2 Router
-    const WBTCAddress = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
-
-    const erc20Abi = [
-      { "constant": false, "inputs": [ { "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" } ], "name": "approve", "outputs": [ { "name": "success", "type": "bool" } ], "type": "function" },
-    ];
-
-    const routerAbi = [
-      {
-        "name": "swapExactTokensForTokens",
-        "type": "function",
-        "inputs": [
-          { "name": "amountIn", "type": "uint256" },
-          { "name": "amountOutMin", "type": "uint256" },
-          { "name": "path", "type": "address[]" },
-          { "name": "to", "type": "address" },
-          { "name": "deadline", "type": "uint256" }
-        ],
-        "outputs": [ { "name": "", "type": "uint256[]" } ],
-        "stateMutability": "nonpayable"
-      },
-      {
-        "name": "getAmountsOut",
-        "type": "function",
-        "inputs": [
-          { "name": "amountIn", "type": "uint256" },
-          { "name": "path", "type": "address[]" }
-        ],
-        "outputs": [ { "name": "amounts", "type": "uint256[]" } ],
-        "stateMutability": "view"
-      }
-    ];
-
-    async function connectWallet() {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        try {
-          const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-          userAddress = accounts[0];
-          document.getElementById("result").innerText = `Wallet connected: ${userAddress}`;
-        } catch (err) {
-          document.getElementById("result").innerText = "Connection failed.";
-        }
-      } else {
-        alert("Install MetaMask first!");
-      }
+  <script>
+    // Check if MetaMask is available
+    if (typeof window.ethereum !== 'undefined') {
+      console.log('MetaMask is available');
+    } else {
+      alert('Please install MetaMask!');
     }
 
-    async function previewTransaction() {
-      const amount = document.getElementById("amount").value;
-      if (!amount || !userAddress) return alert("Enter amount and connect wallet");
-
-      const amountIn = web3.utils.toBN(amount * 1e6);
-      const router = new web3.eth.Contract(routerAbi, routerAddress);
+    // Connect Wallet Button
+    document.getElementById('connectBtn').addEventListener('click', async () => {
       try {
-        const path = [usdtAddress, WBTCAddress];
-        const amountsOut = await router.methods.getAmountsOut(amountIn, path).call();
-        const amountOut = web3.utils.fromWei(amountsOut[1], 'ether');
+        // Request wallet connection
+        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+        console.log('Connected Account:', accounts[0]);
 
-        const preview = `USDT: ${amount} will be swapped for ~${amountOut} WBTC.`;
-        document.getElementById("previewBox").style.display = "block";
-        document.getElementById("previewBox").innerText = preview;
-
-        document.getElementById("confirmPopup").style.display = "block";
-        document.getElementById("confirmMessage").innerText = preview;
-      } catch (err) {
-        document.getElementById("previewBox").innerText = "❌ Error estimating output.";
+        // Hide connect button, show send transaction button
+        document.getElementById('connectBtn').style.display = 'none';
+        document.getElementById('sendTransactionBtn').style.display = 'block';
+      } catch (error) {
+        console.error('Connection failed:', error);
       }
-    }
+    });
 
-    async function executeSwap() {
-      const amount = document.getElementById("amount").value;
-      const amountIn = web3.utils.toBN(amount * 1e6);
-      const router = new web3.eth.Contract(routerAbi, routerAddress);
-      const token = new web3.eth.Contract(erc20Abi, usdtAddress);
+    // Send Transaction Button
+    document.getElementById('sendTransactionBtn').addEventListener('click', async () => {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const toAddress = '0xRecipientAddressHere'; // Replace with actual recipient address
+      const amount = ethers.utils.parseEther('0.01'); // Amount to send in ETH
 
+      // Send transaction
       try {
-        document.getElementById("result").innerText = "Approving USDT...";
-        await token.methods.approve(routerAddress, amountIn).send({ from: userAddress });
-
-        const path = [usdtAddress, WBTCAddress];
-        const amountsOut = await router.methods.getAmountsOut(amountIn, path).call();
-
-        const deadline = Math.floor(Date.now() / 1000) + 60 * 10; // 10 mins
-        await router.methods.swapExactTokensForTokens(
-          amountIn, amountsOut[1], path, userAddress, deadline
-        ).send({ from: userAddress });
-
-        document.getElementById("result").innerText = `✅ Swapped USDT for WBTC!`;
-      } catch (err) {
-        console.error(err);
-        document.getElementById("result").innerText = "❌ Swap failed. Check console.";
+        const tx = await signer.sendTransaction({
+          to: toAddress,
+          value: amount
+        });
+        console.log('Transaction Sent:', tx);
+        
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        console.log('Transaction Receipt:', receipt);
+        alert('Transaction Successful!');
+      } catch (error) {
+        console.error('Transaction failed:', error);
       }
-    }
-  </script></body>
+    });
+  </script>
+</body>
 </html>
