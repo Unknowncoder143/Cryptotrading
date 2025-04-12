@@ -1,81 +1,77 @@
 <!DOCTYPE html>
 <html>
-<head><title>Token↔Token Swap</title></head>
+<head><title>Swap Widget</title></head>
 <body>
-  <h3>Swap Tokens</h3>
-  <input id="tokenIn" placeholder="Token In Address" value="0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"/> <!-- WBTC 0 -->
-  <input id="tokenOut" placeholder="Token Out Address" value="0xdac17f958d2ee523a2206206994597c13d831ec7"/> <!-- USDT 1 -->
-  <input id="amountIn" placeholder="Amount" />
+  <button id="connectBtn">Connect Wallet</button><br/>
+  <input id="tokenAddr" placeholder="Token Address (WBTC/USDT)"/><br/>
+  <textarea id="abiJson" placeholder="Paste ERC20 ABI JSON"></textarea><br/>
+  <input id="amountIn" placeholder="Amount"/><br/>
   <div id="preview">Preview: --</div>
-  <button id="approveBtn">Approve</button>
-  <button id="swapBtn">Swap</button>
+  <button id="approveBtn" disabled>Approve</button>
+  <button id="swapBtn" disabled>Swap</button>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
   <script>
-    const routerAddress = "0x7a250d5630b4cF539739dF2C5dAcb4c659F2488D"; // Uniswap V2 Router02 2
+    const routerAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // UniswapV2Router02 0
+    const WBTC = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599";             // WBTC 1
+    const USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7";            // USDT 2
     const routerAbi = [
       "function getAmountsOut(uint256,address[]) view returns (uint256[])",
-      "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256) returns (uint256[])"
+      "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)"
     ];
-    const erc20Abi = [
-      "function approve(address,uint256) external returns (bool)",
-      "function decimals() view returns (uint8)"
-    ];
+    let provider, signer, router, erc20Abi, tokenIn, tokenOut;
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const signer = provider.getSigner();
-    const router = new ethers.Contract(routerAddress, routerAbi, signer);
+    document.getElementById("connectBtn").onclick = async () => {
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      router = new ethers.Contract(routerAddress, routerAbi, signer);
+      document.getElementById("approveBtn").disabled = false;
+      document.getElementById("swapBtn").disabled = false;
+      alert("Wallet connected!");
+    };
 
-    async function updatePreview() {
-      const inAddr = document.getElementById("tokenIn").value;
-      const outAddr = document.getElementById("tokenOut").value;
-      const amount = document.getElementById("amountIn").value;
-      if (!inAddr||!outAddr||!amount) return;
-      const inContract = new ethers.Contract(inAddr, erc20Abi, signer);
-      const outContract = new ethers.Contract(outAddr, erc20Abi, signer);
-      const decIn = await inContract.decimals();
-      const decOut = await outContract.decimals();
-      const amtIn = ethers.utils.parseUnits(amount, decIn);
-      const amounts = await router.getAmountsOut(amtIn, [inAddr, outAddr]);
-      document.getElementById("preview").innerText =
-        `Preview: ${ethers.utils.formatUnits(amounts[1], decOut)}`;
+    document.getElementById("abiJson").addEventListener("input", () => {
+      try { erc20Abi = JSON.parse(document.getElementById("abiJson").value); }
+      catch { erc20Abi = null; }
+    });
+
+    document.getElementById("tokenAddr").addEventListener("change", () => {
+      const addr = document.getElementById("tokenAddr").value.trim().toLowerCase();
+      if(addr===WBTC.toLowerCase()){ tokenIn=WBTC; tokenOut=USDT; }
+      else if(addr===USDT.toLowerCase()){ tokenIn=USDT; tokenOut=WBTC; }
+      else{ tokenIn=tokenOut=null; document.getElementById("preview").innerText="Use WBTC or USDT"; }
+    });
+
+    async function updatePreview(){
+      if(!erc20Abi||!tokenIn) return;
+      const inC = new ethers.Contract(tokenIn, erc20Abi, signer);
+      const decIn = await inC.decimals();
+      const decOut = await new ethers.Contract(tokenOut, erc20Abi, signer).decimals();
+      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
+      const amounts = await router.getAmountsOut(amtIn, [tokenIn, tokenOut]);
+      document.getElementById("preview").innerText = `Preview: ${ethers.utils.formatUnits(amounts[1], decOut)}`;
     }
-
-    document.getElementById("tokenIn").addEventListener("change", updatePreview);
-    document.getElementById("tokenOut").addEventListener("change", updatePreview);
     document.getElementById("amountIn").addEventListener("input", updatePreview);
 
     document.getElementById("approveBtn").onclick = async () => {
-      await provider.send("eth_requestAccounts", []);
-      const inAddr = document.getElementById("tokenIn").value;
-      const amount = document.getElementById("amountIn").value;
-      const inContract = new ethers.Contract(inAddr, erc20Abi, signer);
-      const decIn = await inContract.decimals();
-      const amtIn = ethers.utils.parseUnits(amount, decIn);
-      await inContract.approve(routerAddress, amtIn);
-      alert("Approved! 👍");
+      const c = new ethers.Contract(tokenIn, erc20Abi, signer);
+      const decIn = await c.decimals();
+      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
+      await c.approve(routerAddress, amtIn);
+      alert("Approved!");
     };
 
     document.getElementById("swapBtn").onclick = async () => {
-      await provider.send("eth_requestAccounts", []);
-      const inAddr = document.getElementById("tokenIn").value;
-      const outAddr = document.getElementById("tokenOut").value;
-      const amount = document.getElementById("amountIn").value;
-      const inContract = new ethers.Contract(inAddr, erc20Abi, signer);
-      const outContract = new ethers.Contract(outAddr, erc20Abi, signer);
-      const decIn = await inContract.decimals();
-      const decOut = await outContract.decimals();
-      const amtIn = ethers.utils.parseUnits(amount, decIn);
-      const amounts = await router.getAmountsOut(amtIn, [inAddr, outAddr]);
-      const minOut = amounts[1].mul(95).div(100); // 5% slippage
-      const deadline = Math.floor(Date.now()/1000) + 600;
-      await router.swapExactTokensForTokens(
-        amtIn, minOut,
-        [inAddr, outAddr],
-        await signer.getAddress(),
-        deadline
-      );
-      alert("Swapped! 🎉");
+      const c = new ethers.Contract(tokenIn, erc20Abi, signer);
+      const decIn = await c.decimals();
+      const decOut = await new ethers.Contract(tokenOut, erc20Abi, signer).decimals();
+      const amtIn = ethers.utils.parseUnits(document.getElementById("amountIn").value||"0", decIn);
+      const amounts = await router.getAmountsOut(amtIn, [tokenIn, tokenOut]);
+      const minOut = amounts[1].mul(95).div(100);
+      const deadline = Math.floor(Date.now()/1000)+600;
+      await router.swapExactTokensForTokens(amtIn, minOut, [tokenIn, tokenOut], await signer.getAddress(), deadline);
+      alert("Swapped!");
     };
   </script>
 </body>
