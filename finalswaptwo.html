@@ -106,12 +106,13 @@
       const amountInWei = web3.utils.toBN(amount * 1e6); // USDT has 6 decimals
 
       try {
+        // Check if the contract supports getAmountOut and it is callable
         const estimatedAmountOut = await poolContract.methods.getAmountOut(amountInWei).call();
         const estimatedWBTC = web3.utils.fromWei(estimatedAmountOut.toString(), 'ether'); // WBTC has 8 decimals
         document.getElementById("estimatedOutput").innerText = `Estimated WBTC: ${estimatedWBTC}`;
       } catch (error) {
         console.error("Error estimating output:", error);
-        document.getElementById("estimatedOutput").innerText = "❌ Error estimating output.";
+        document.getElementById("estimatedOutput").innerText = `❌ Error estimating output. ${error.message}`;
       }
     }
 
