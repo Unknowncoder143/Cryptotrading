@@ -103,7 +103,7 @@
 
     async function estimateAmountOut(amount, poolAddress) {
       const poolContract = new web3.eth.Contract(poolAbi, poolAddress);
-      const amountInWei = web3.utils.toBN(amount * 1e6); // USDT has 6 decimals
+      const amountInWei = web3.utils.toBN(amount * 1e6); // USDT = 6 decimals
 
       try {
         // Check if the contract supports getAmountOut and it is callable
