@@ -105,6 +105,8 @@
       const poolContract = new web3.eth.Contract(poolAbi, poolAddress);
       const amountInWei = web3.utils.toBN(amount * 1e6); // USDT = 6 decimals
 
+      console.log(`Estimating output for ${amount} USDT with pool address: ${poolAddress}`);
+
       try {
         // Check if the contract supports getAmountOut and it is callable
         const estimatedAmountOut = await poolContract.methods.getAmountOut(amountInWei).call();
