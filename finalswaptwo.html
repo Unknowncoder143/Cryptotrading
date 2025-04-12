@@ -17,6 +17,7 @@
   <button onclick="connectWallet()">Connect Wallet</button>
   <button onclick="previewTransaction()">Preview Transaction</button>
   <button onclick="signTransaction()" id="signButton" style="display:none;">Sign & Confirm</button>
+  <button onclick="executeSwap()" id="swapButton" style="display:none;">Execute Swap</button>
 
   <div id="previewBox" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; display: none;"></div>
   <p id="result" style="margin-top: 20px;"></p>
@@ -24,6 +25,30 @@
   <script>
     let web3;
     let userAddress;
+
+    const erc20Abi = [
+      {
+        constant: false,
+        inputs: [
+          { name: "_spender", type: "address" },
+          { name: "_value", type: "uint256" }
+        ],
+        name: "approve",
+        outputs: [{ name: "success", type: "bool" }],
+        type: "function"
+      }
+    ];
+
+    const swapAbi = [
+      {
+        constant: false,
+        inputs: [{ name: "amountIn", type: "uint256" }],
+        name: "swapUSDTForWBTC",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function"
+      }
+    ];
 
     async function connectWallet() {
       if (window.ethereum) {
@@ -96,18 +121,36 @@
         const params = [from, msgParams];
         const method = 'eth_signTypedData_v4';
 
-        const signature = await ethereum.request({
-          method,
-          params,
-        });
+        await ethereum.request({ method, params });
 
-        document.getElementById("result").innerText =
-          `✅ Signed successfully!\nSignature: ${signature.substring(0, 20)}...`;
-
-        // You can now use this signature to call the actual swap if needed
+        document.getElementById("result").innerText = "✅ Signed successfully! Now ready to swap.";
+        document.getElementById("swapButton").style.display = "inline-block";
       } catch (err) {
         console.error(err);
         document.getElementById("result").innerText = "❌ Signing rejected or failed.";
+      }
+    }
+
+    async function executeSwap() {
+      const amount = document.getElementById("amount").value;
+      const poolAddress = document.getElementById("poolAddress").value;
+      const usdtAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Mainnet USDT
+
+      const amountInWei = web3.utils.toBN(amount * 1e6);
+      const usdt = new web3.eth.Contract(erc20Abi, usdtAddress);
+      const pool = new web3.eth.Contract(swapAbi, poolAddress);
+
+      try {
+        document.getElementById("result").innerText = "⏳ Approving USDT...";
+        await usdt.methods.approve(poolAddress, amountInWei).send({ from: userAddress });
+
+        document.getElementById("result").innerText = "⏳ Swapping now...";
+        await pool.methods.swapUSDTForWBTC(amountInWei).send({ from: userAddress });
+
+        document.getElementById("result").innerText = "✅ Swap successful!";
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").innerText = "❌ Swap failed. Check console.";
       }
     }
   </script>
