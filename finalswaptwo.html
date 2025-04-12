@@ -30,7 +30,8 @@
   <input id="amount" type="number" placeholder="USDT Amount" /><br>
   <input id="pool" type="text" placeholder="Pool Contract Address" /><br>
 
-  <button onclick="showPreview()">Confirm</button>
+  <button onclick="showPreview()">Preview Swap</button>
+  <p id="estimatedOutput" style="margin-top: 10px;"></p>
 
   <div id="overlay"></div>
   <div id="popup">
@@ -45,6 +46,7 @@
     let web3;
     let userAddress;
     const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // mainnet USDT
+    const WBTC = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"; // mainnet WBTC
 
     const erc20Abi = [
       {
@@ -68,6 +70,15 @@
         "payable": false,
         "stateMutability": "nonpayable",
         "type": "function"
+      },
+      {
+        "constant": true,
+        "inputs": [{ "name": "amountIn", "type": "uint256" }],
+        "name": "getAmountOut",
+        "outputs": [{ "name": "amountOut", "type": "uint256" }],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
       }
     ];
 
@@ -87,19 +98,21 @@
       const pool = document.getElementById("pool").value;
       if (!amount || !pool) return alert("Please enter amount & pool address.");
 
-      // Prepare preview message to be signed (for wallet interaction)
-      const msg = `
-        Swap Preview: <br>
-        <strong>Give:</strong> ${amount} USDT<br>
-        <strong>Receive:</strong> WBTC<br><br>
-        <strong>Pool Contract Address:</strong> ${pool}<br><br>
-        Confirm the transaction by signing it in your wallet.
-      `;
-      
-      // Show preview popup with the message
-      document.getElementById("messageBox").innerHTML = msg;
-      document.getElementById("overlay").style.display = "block";
-      document.getElementById("popup").style.display = "block";
+      estimateAmountOut(amount, pool);
+    }
+
+    async function estimateAmountOut(amount, poolAddress) {
+      const poolContract = new web3.eth.Contract(poolAbi, poolAddress);
+      const amountInWei = web3.utils.toBN(amount * 1e6); // USDT has 6 decimals
+
+      try {
+        const estimatedAmountOut = await poolContract.methods.getAmountOut(amountInWei).call();
+        const estimatedWBTC = web3.utils.fromWei(estimatedAmountOut.toString(), 'ether'); // WBTC has 8 decimals
+        document.getElementById("estimatedOutput").innerText = `Estimated WBTC: ${estimatedWBTC}`;
+      } catch (error) {
+        console.error("Error estimating output:", error);
+        document.getElementById("estimatedOutput").innerText = "❌ Error estimating output.";
+      }
     }
 
     function hidePopup() {
