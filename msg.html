@@ -1,44 +1,40 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Web3 Transaction Preview</title>
+  <title>Web3 Wallet Confirmation</title>
 </head>
 <body>
   <button id="sendTx">Send Transaction</button>
-  <p id="preview"></p>
+  <p id="message"></p>
 
   <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
   <script>
-    const sendBtn = document.getElementById("sendTx");
-    const preview = document.getElementById("preview");
+    const btn = document.getElementById("sendTx");
+    const msg = document.getElementById("message");
 
-    async function sendTransaction() {
-      if (typeof window.ethereum === 'undefined') {
-        preview.innerText = "MetaMask not detected!";
+    btn.onclick = async () => {
+      if (!window.ethereum) {
+        msg.innerText = "MetaMask not detected!";
         return;
       }
 
       const web3 = new Web3(window.ethereum);
       const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+
       const from = accounts[0];
-      const to = "0xAbC123..."; // receiver address
+      const to = "0x123abc..."; // Replace with real address
       const value = web3.utils.toWei("0.01", "ether");
 
-      // Show preview message before wallet pops up
-      preview.innerText = `Preview: You're about to send 0.01 ETH from ${from} to ${to}`;
+      // Show message while MetaMask is open
+      msg.innerText = "Waiting for wallet confirmation…";
 
-      // Wait a moment, then prompt wallet
-      setTimeout(async () => {
-        try {
-          const tx = await web3.eth.sendTransaction({ from, to, value });
-          preview.innerText = "Transaction successful!";
-        } catch (err) {
-          preview.innerText = "Transaction cancelled or failed.";
-        }
-      }, 2000);
-    }
-
-    sendBtn.onclick = sendTransaction;
+      try {
+        const tx = await web3.eth.sendTransaction({ from, to, value });
+        msg.innerText = "Transaction confirmed!";
+      } catch (err) {
+        msg.innerText = "Transaction cancelled or failed.";
+      }
+    };
   </script>
 </body>
 </html>
