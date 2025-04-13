@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>USDT → WBTC Swap</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+</head>
+<body style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px;">
+
+  <h2>USDT → WBTC Swap</h2>
+
+  <label>Amount (USDT):</label><br>
+  <input type="number" id="amount" placeholder="e.g. 100" /><br><br>
+
+  <label>Swap Contract Address:</label><br>
+  <input type="text" id="contractAddress" placeholder="0x..." /><br><br>
+
+  <button onclick="connectWallet()">🔗 Connect Wallet</button>
+  <button onclick="previewSwap()">🔍 Preview</button>
+  <button onclick="executeSwap()" id="swapBtn" style="display:none;">⚡ Confirm & Swap</button>
+
+  <div id="preview" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; display: none;"></div>
+  <p id="result" style="margin-top: 20px;"></p>
+
+  <script>
+    let web3;
+    let userAddress;
+
+    const usdtAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Mainnet USDT
+
+    const usdtAbi = [
+      {
+        "constant": false,
+        "inputs": [
+          { "name": "_spender", "type": "address" },
+          { "name": "_value", "type": "uint256" }
+        ],
+        "name": "approve",
+        "outputs": [{ "name": "success", "type": "bool" }],
+        "type": "function"
+      }
+    ];
+
+    const swapAbi = [
+      {
+        "constant": true,
+        "inputs": [{ "name": "amountIn", "type": "uint256" }],
+        "name": "getEstimatedWBTCOut",
+        "outputs": [{ "name": "amountOut", "type": "uint256" }],
+        "type": "function"
+      },
+      {
+        "constant": false,
+        "inputs": [
+          { "name": "amountIn", "type": "uint256" },
+          { "name": "minOut", "type": "uint256" }
+        ],
+        "name": "swapUSDTForWBTC",
+        "outputs": [],
+        "type": "function"
+      }
+    ];
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+        userAddress = accounts[0];
+        document.getElementById("result").innerText = `✅ Wallet: ${userAddress}`;
+      } else {
+        alert("Please install MetaMask!");
+      }
+    }
+
+    async function previewSwap() {
+      const amount = parseFloat(document.getElementById("amount").value);
+      const contractAddress = document.getElementById("contractAddress").value;
+
+      if (!amount || !contractAddress) return alert("Enter amount and contract address!");
+
+      const amountIn = web3.utils.toBN(amount * 1e6); // USDT = 6 decimals
+      const contract = new web3.eth.Contract(swapAbi, contractAddress);
+
+      try {
+        const estimatedOut = await contract.methods.getEstimatedWBTCOut(amountIn).call();
+        const wbtc = estimatedOut / 1e8;
+
+        document.getElementById("preview").style.display = "block";
+        document.getElementById("preview").innerHTML = `
+          <b>Preview:</b><br>
+          Sending: ${amount} USDT<br>
+          Receiving: ≈ ${wbtc.toFixed(8)} WBTC<br><br>
+          Click "Confirm & Swap" to continue...
+        `;
+        document.getElementById("swapBtn").style.display = "inline-block";
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").innerText = "❌ Error previewing transaction.";
+      }
+    }
+
+    async function executeSwap() {
+      const amount = parseFloat(document.getElementById("amount").value);
+      const contractAddress = document.getElementById("contractAddress").value;
+
+      const contract = new web3.eth.Contract(swapAbi, contractAddress);
+      const usdt = new web3.eth.Contract(usdtAbi, usdtAddress);
+      const amountIn = web3.utils.toBN(amount * 1e6);
+      const estimated = await contract.methods.getEstimatedWBTCOut(amountIn).call();
+      const minOut = web3.utils.toBN(estimated * 95 / 100); // 5% slippage buffer
+
+      try {
+        document.getElementById("result").innerText = "⏳ Approving USDT...";
+        await usdt.methods.approve(contractAddress, amountIn).send({ from: userAddress });
+
+        document.getElementById("result").innerText = "⚙️ Swapping...";
+        await contract.methods.swapUSDTForWBTC(amountIn, minOut).send({ from: userAddress });
+
+        document.getElementById("result").innerText = "✅ Swap successful!";
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").innerText = "❌ Swap failed.";
+      }
+    }
+  </script>
+</body>
+</html>
