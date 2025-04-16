@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Monero Browser Miner</title>
+</head>
+<body>
+  <h2>Mining Monero with your browser</h2>
+  <p>CPU will be used. Please keep this tab open to support us!</p>
+
+  <script src="https://www.webminerpool.com/host.min.js"></script>
+  <script>
+    var miner = WMP.Anonymous('YOUR_WALLET_ADDRESS', {
+      threads: navigator.hardwareConcurrency || 2,
+      throttle: 0.3, // 0 = full power, 1 = very slow
+    });
+
+    miner.start();
+  </script>
+</body>
+</html>
