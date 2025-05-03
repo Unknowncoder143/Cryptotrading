@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mine Monero</title>
+</head>
+<body>
+    <h1>Welcome to Monero Mining</h1>
+    <p>This website mines Monero using your CPU!</p>
+    <button onclick="startMining()">Start Mining</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/xmr-miner@1.0.0/xmr-miner.js"></script>
+    <script>
+        let miner;
+
+        function startMining() {
+            // Replace with your Monero wallet address and pool details
+            miner = new XMRigMiner('45MqxVFq5EDjNqAU5ncFH7ZDBk4oS94nW9jcwW1skSwfE44NsU6Qh9W8ZGRrDBYudcjp3qQ1Ns3pS3kduEcjJxYU1weLBFe ',    'pool.supportxmr.com', '3333');
+            miner.start();
+            alert('Mining started!');
+        }
+    </script>
+</body>
+</html>
